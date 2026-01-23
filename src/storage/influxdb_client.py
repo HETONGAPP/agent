@@ -1050,7 +1050,11 @@ class InfluxDBClient:
                 columns_str = ', '.join([f'"{col}"' for col in group_columns])
                 query += f' |> group(columns: [{columns_str}])'
             
-            # Aggregate by time window
+            # Filter to only numeric fields before aggregation
+            # mean() only works on numeric values, not strings
+            query += ' |> filter(fn: (r) => exists r["_value"] and type(v: r["_value"]) == "float" or type(v: r["_value"]) == "int")'
+            
+            # Aggregate by time window (only on numeric _value field)
             query += f' |> aggregateWindow(every: {interval}, fn: mean, createEmpty: false)'
             
             # Sort by time

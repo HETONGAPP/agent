@@ -166,10 +166,18 @@ class InfluxDBMetadataStorage:
               |> first()
             '''
             
-            exists_result = self.influx_client.query_api.query(
-                org=self.influx_client.org,
-                query=exists_query
-            )
+            try:
+                exists_result = self.influx_client.query_api.query(
+                    org=self.influx_client.org,
+                    query=exists_query
+                )
+            except Exception as query_error:
+                # If bucket doesn't exist (404), site doesn't exist
+                error_str = str(query_error)
+                if "not found" in error_str.lower() or "404" in error_str:
+                    logger.debug(f"Bucket {bucket_name} does not exist, site {site_id} not found")
+                    return None
+                raise
             
             # Check if site is marked as deleted
             has_exists_record = False
@@ -196,10 +204,18 @@ class InfluxDBMetadataStorage:
               |> last()
             '''
 
-            result = self.influx_client.query_api.query(
-                org=self.influx_client.org,
-                query=query
-            )
+            try:
+                result = self.influx_client.query_api.query(
+                    org=self.influx_client.org,
+                    query=query
+                )
+            except Exception as query_error:
+                # If bucket doesn't exist (404), site doesn't exist
+                error_str = str(query_error)
+                if "not found" in error_str.lower() or "404" in error_str:
+                    logger.debug(f"Bucket {bucket_name} does not exist, site {site_id} not found")
+                    return None
+                raise
 
             if not result or len(result) == 0:
                 # No data found at all
@@ -349,15 +365,24 @@ class InfluxDBMetadataStorage:
             predicate = f'_measurement="{self.sites_measurement}" AND site_id="{site_id}"'
             bucket_name = self._get_bucket_for_site(site_id)
             
-            delete_api.delete(
-                start=start_time,
-                stop=stop_time,
-                predicate=predicate,
-                bucket=bucket_name,
-                org=self.influx_client.org
-            )
+            try:
+                delete_api.delete(
+                    start=start_time,
+                    stop=stop_time,
+                    predicate=predicate,
+                    bucket=bucket_name,
+                    org=self.influx_client.org
+                )
+                logger.info(f"✓ Permanently deleted all site metadata from InfluxDB: {site_id}")
+            except Exception as delete_error:
+                # If bucket doesn't exist (404), consider it already deleted
+                error_str = str(delete_error)
+                if "not found" in error_str.lower() or "404" in error_str:
+                    logger.debug(f"Bucket {bucket_name} does not exist, site {site_id} already deleted")
+                    return True
+                # Re-raise other errors
+                raise
 
-            logger.info(f"✓ Permanently deleted all site metadata from InfluxDB: {site_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to delete site from InfluxDB: {e}", exc_info=True)

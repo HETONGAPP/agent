@@ -144,7 +144,7 @@ You don't need to analyze the data, just collect it accurately.
     async def _collect_historical(
         self, site_id: str, time_range: str, task_description: str
     ) -> List[Dict[str, Any]]:
-        """Collect historical time-series data"""
+        """Collect historical time-series data with variable and device information"""
         if not self.influx_client:
             logger.warning("InfluxDB client not available, returning empty historical data")
             return []
@@ -157,15 +157,16 @@ You don't need to analyze the data, just collect it accurately.
 
         historical_data = []
         try:
-            # Get device IDs for the site
+            # Get device IDs for the site with device type information
             devices = await self._collect_devices(site_id)
+            device_map = {d.get("device_id"): d for d in devices}  # Map device_id -> device info
             device_ids = [d.get("device_id") for d in devices if d.get("device_id")][:10]  # Limit to 10 devices
 
             if not device_ids:
                 logger.warning(f"No devices found for site {site_id}")
                 return []
 
-            # Query each metric
+            # Query each metric and enrich with device and variable information
             for metric in metrics:
                 try:
                     time_series = self.influx_client.query_device_time_series(
@@ -176,6 +177,13 @@ You don't need to analyze the data, just collect it accurately.
                         interval="1h",
                         limit=100,
                     )
+                    # Enrich each data point with device and variable information
+                    for point in time_series:
+                        device_id = point.get("device_id")
+                        device_info = device_map.get(device_id, {})
+                        point["device_type"] = device_info.get("device_type", "unknown")
+                        point["device_status"] = device_info.get("status", "unknown")
+                        point["variable_name"] = metric  # Explicitly add variable name
                     historical_data.extend(time_series)
                 except Exception as e:
                     logger.warning(f"Failed to query metric {metric}: {e}")

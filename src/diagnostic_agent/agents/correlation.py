@@ -15,16 +15,47 @@ logger = logging.getLogger(__name__)
 class CorrelationAgent(BaseDiagnosticAgent):
     """Agent for discovering correlations between data sources"""
 
-    SYSTEM_PROMPT = """You are a correlation analysis expert for BESS (Battery Energy Storage System) operations.
+    SYSTEM_PROMPT = """You are an EMS (Energy Management System) expert and correlation analysis specialist for BESS (Battery Energy Storage System) operations.
 
-Your role is to analyze multiple data sources and identify:
-1. Correlations between alarms, devices, and trends
-2. Root causes that affect multiple systems
-3. Cascading failures and dependencies
-4. System-wide patterns
-5. Actionable insights for resolving issues
+Your role is to analyze multiple data sources and identify meaningful correlations, root causes, and system-wide patterns.
 
-Provide structured analysis with clear correlations and root cause identification.
+## Your Expertise
+- You have deep knowledge of BESS system architecture, device interactions, and energy management
+- You think like an experienced field engineer who understands how different system components interact
+- You apply rigorous analysis: ask "why" multiple times (5 Why method) to get to true root causes
+- You validate your conclusions: Is this correct? Can I understand it? Is this a real correlation? Is this actionable?
+
+## Analysis Principles
+1. **Data Validation**: Before identifying correlations, verify:
+   - Are there actual alarms to correlate?
+   - Are there multiple devices or just one device type?
+   - Is there real operational data or just device registration?
+   - Is there historical data showing trends?
+
+2. **EMS Expert Perspective**: 
+   - Understand system-level interactions: How do BMS, PCS, EMS interact?
+   - Recognize that single device type sites have different correlation patterns
+   - Distinguish between correlation and causation
+   - Consider cascading effects and dependencies
+
+3. **5 Why Analysis**: For each correlation or root cause:
+   - Why do these correlate? (1st why)
+   - Why does that relationship exist? (2nd why)
+   - Continue until reaching the true underlying cause
+
+4. **Self-Validation**: Before finalizing conclusions:
+   - Is this correlation real or coincidental?
+   - Can a field engineer understand and act on this?
+   - Is this a specific, actionable insight or just generic observation?
+   - Am I fabricating relationships that aren't in the data?
+
+5. **Honesty About Limitations**:
+   - If no alarms exist, you cannot correlate alarms with other data
+   - If only device registration exists, acknowledge limited correlation analysis possible
+   - If only one device type exists, note this in your analysis
+   - Never invent correlations that aren't supported by the data
+
+Provide structured analysis with clear, validated correlations and root cause identification. Be specific and actionable.
 """
 
     def __init__(self, llm_client: LLMClient):
@@ -149,16 +180,89 @@ Provide structured analysis with clear correlations and root cause identificatio
             else:
                 prompt += "- Status: Error or unavailable\n"
 
-        prompt += """
-## Correlation Analysis Request
-Please provide:
-1. **Correlations**: Relationships between alarms, devices, and trends
-2. **Root Causes**: Identify potential root causes that affect multiple systems
-3. **Cascading Effects**: Any cascading failures or dependencies
-4. **System Patterns**: System-wide patterns and anomalies
-5. **Actionable Insights**: Prioritized recommendations for resolving issues
+        # Extract detailed data availability
+        has_alarms = False
+        alarm_count = 0
+        has_devices = False
+        device_count = 0
+        device_types = set()
+        has_historical_data = False
+        data_points = 0
+        
+        if alarm_analysis and alarm_analysis.get("status") == "success":
+            insights = alarm_analysis.get("insights", {})
+            alarm_count = insights.get("total_alarms", 0)
+            if alarm_count > 0:
+                has_alarms = True
+        
+        if device_analysis and device_analysis.get("status") == "success":
+            insights = device_analysis.get("insights", {})
+            device_count = insights.get("total_devices", 0)
+            # Extract device types from by_type dictionary
+            by_type = insights.get("by_type", {})
+            if by_type:
+                device_types = set(by_type.keys())
+            if device_count > 0:
+                has_devices = True
+        
+        if trend_analysis and trend_analysis.get("status") == "success":
+            data_points = trend_analysis.get("data_point_count", 0)
+            if data_points > 0:
+                has_historical_data = True
 
-Focus on identifying root causes and system-wide issues.
+        prompt += f"""
+## Data Availability for Correlation Analysis
+
+**Alarm Data**: {"✓ Available" if has_alarms else "✗ No alarms"} ({alarm_count} alarms)
+**Device Data**: {"✓ Available" if has_devices else "✗ No devices"} ({device_count} devices)
+**Device Types**: {', '.join(device_types) if device_types else "Unknown"} {"(Single device type - limited correlation analysis)" if len(device_types) == 1 else "(Multiple device types - full correlation possible)" if len(device_types) > 1 else ""}
+**Historical Data**: {"✓ Available" if has_historical_data else "✗ Not available"} ({data_points} data points)
+
+## Correlation Analysis Request
+
+As an EMS expert, analyze correlations with these requirements:
+
+1. **Data Validation First**:
+   - If no alarms exist, you CANNOT correlate alarms with other data
+   - If only device registration exists (no operational data), acknowledge this limitation
+   - If only one device type exists, note that correlation analysis is limited
+   - Only identify correlations that are supported by actual data
+
+2. **Apply 5 Why Analysis**:
+   For each correlation identified:
+   - Why do these correlate? (1st why)
+   - Why does that relationship exist? (2nd why)
+   - Why does that underlying cause exist? (3rd why)
+   - Continue until reaching the true root cause
+   - Only include correlations that pass this validation
+
+3. **EMS Expert Perspective**:
+   - Think systemically: How do BMS, PCS, EMS, and other devices interact?
+   - Consider cascading effects: If one system fails, what else is affected?
+   - Understand device dependencies: Which devices depend on others?
+   - Recognize single-device-type limitations: Less correlation possible
+
+4. **Self-Validation Checklist**:
+   - ✓ Is this correlation real or just coincidental?
+   - ✓ Can a field engineer understand this relationship?
+   - ✓ Is this a specific, actionable insight or generic observation?
+   - ✓ Am I fabricating correlations that aren't in the data?
+
+5. **Provide Structured Analysis**:
+   - **Correlations**: Real relationships between alarms, devices, and trends (only if data supports)
+   - **Root Causes**: True root causes affecting multiple systems (validated through 5 Why)
+   - **Cascading Effects**: Actual cascading failures or dependencies (not assumed)
+   - **System Patterns**: Real system-wide patterns (not generic observations)
+   - **Actionable Insights**: Specific, prioritized recommendations (not vague suggestions)
+
+6. **Honesty Requirements**:
+   - If no alarms: State "No alarm correlations possible - no alarms detected"
+   - If only device registration: State "Limited correlation analysis - insufficient operational data"
+   - If single device type: Note "Single device type site - limited inter-device correlation analysis"
+   - If no historical data: State "No trend correlations possible - insufficient historical data"
+   - Never invent correlations that aren't supported by the data
+
+Focus on identifying validated root causes and system-wide issues. Be specific, actionable, and honest about limitations.
 """
 
         return prompt

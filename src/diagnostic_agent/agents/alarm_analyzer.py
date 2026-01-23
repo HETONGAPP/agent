@@ -48,11 +48,22 @@ Provide structured analysis with clear insights and actionable findings.
                     alarm_data = dep_result.get("data", [])
                     break
 
-        if not alarm_data:
+        if not alarm_data or len(alarm_data) == 0:
+            # Return success with no alarms message instead of error
+            # This allows the report generator to handle the case gracefully
             return {
-                "status": "error",
+                "status": "success",
                 "agent": self.agent_name,
-                "error": "No alarm data available from dependencies",
+                "analysis": "No alarms found for this site in the specified time range. This indicates normal system operation with no active issues.",
+                "insights": {
+                    "total_alarms": 0,
+                    "by_severity": {},
+                    "by_type": {},
+                    "critical_count": 0,
+                    "warning_count": 0,
+                    "info_count": 0,
+                },
+                "alarm_count": 0,
                 "site_id": site_id,
             }
 

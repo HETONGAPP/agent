@@ -1,0 +1,941 @@
+"""
+Site Manager
+Manages site configurations and provides site-related operations
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+import yaml
+
+logger = logging.getLogger(__name__)
+
+
+class SiteManager:
+    """Manages site configurations and operations with InfluxDB persistence"""
+
+    def __init__(self, site_rules_dir: Optional[str] = None, influx_metadata_storage=None, container_manager=None):
+        """
+        Initialize site manager
+
+        Args:
+            site_rules_dir: Directory containing site configuration files (for backward compatibility)
+            influx_metadata_storage: Optional InfluxDBMetadataStorage instance for persistence
+            container_manager: Optional SiteContainerManager instance for rule storage in containers
+        """
+        self.site_rules_dir = Path(site_rules_dir) if site_rules_dir else None
+        self._site_configs_cache: Dict[str, Dict[str, Any]] = {}
+        self._site_rules_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._influx_storage = influx_metadata_storage
+        self._container_manager = container_manager
+
+    def get_all_sites(self) -> List[Dict[str, Any]]:
+        """
+        Get all sites from InfluxDB (preferred) or configuration files
+
+        Returns:
+            List of site information dictionaries
+        """
+        # Try InfluxDB first
+        if self._influx_storage:
+            try:
+                sites = self._influx_storage.get_all_sites()
+                if sites:
+                    return sites
+            except Exception as e:
+                logger.warning(f"Failed to load sites from InfluxDB: {e}, falling back to files")
+
+        # Fallback to files (backward compatibility)
+        # Only if InfluxDB returned empty and we have files
+        if not self.site_rules_dir or not self.site_rules_dir.exists():
+            return []
+
+        sites = []
+        for config_file in self.site_rules_dir.glob("*_config.yaml"):
+            try:
+                site_id = config_file.stem.replace("_config", "")
+                # Check if site is marked as deleted in InfluxDB first
+                if self._influx_storage:
+                    site_data = self._influx_storage.get_site(site_id)
+                    if not site_data:  # Site is deleted or doesn't exist
+                        continue
+                site_info = self.get_site(site_id)
+                if site_info:
+                    sites.append(site_info)
+            except Exception as e:
+                logger.warning(f"Failed to load site from {config_file}: {e}")
+
+        return sites
+
+    def get_site(self, site_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get site information by site_id from InfluxDB (preferred) or files
+
+        Args:
+            site_id: Site ID
+
+        Returns:
+            Site information dictionary or None if not found
+        """
+        # Check cache first
+        if site_id in self._site_configs_cache:
+            return self._site_configs_cache[site_id].copy()
+
+        # Try InfluxDB first
+        if self._influx_storage:
+            try:
+                site_data = self._influx_storage.get_site(site_id)
+                if site_data:
+                    # Cache the result
+                    self._site_configs_cache[site_id] = site_data
+                    return site_data.copy()
+            except Exception as e:
+                logger.warning(f"Failed to load site from InfluxDB: {e}, trying files")
+
+        # Fallback to files (backward compatibility)
+        if not self.site_rules_dir:
+            return None
+
+        # Load from file
+        config_file = self.site_rules_dir / f"{site_id}_config.yaml"
+        if not config_file.exists():
+            return None
+
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+            
+            # Add site_id if not present
+            if "site_id" not in config:
+                config["site_id"] = site_id
+
+            # Cache the result
+            self._site_configs_cache[site_id] = config
+            
+            # Also save to InfluxDB for future use
+            if self._influx_storage:
+                try:
+                    self._influx_storage.save_site(config)
+                except Exception as e:
+                    logger.warning(f"Failed to sync site to InfluxDB: {e}")
+            
+            return config.copy()
+        except Exception as e:
+            logger.error(f"Failed to load site config for {site_id}: {e}", exc_info=True)
+            return None
+
+    def get_site_rules(self, site_id: str) -> List[Dict[str, Any]]:
+        """
+        Get site-specific rules
+        Priority: Database (container) > File > Cache
+        Global rules are loaded from file, site rules are loaded from database first, then file as fallback
+
+        Args:
+            site_id: Site ID
+
+        Returns:
+            List of site-specific rules
+        """
+        # Check cache first
+        if site_id in self._site_rules_cache:
+            return self._site_rules_cache[site_id].copy()
+
+        # Try to get from container (database) first
+        if self._container_manager:
+            try:
+                container = self._container_manager.get_container(site_id, auto_create=False)
+                if container:
+                    rules = container.query_rules()
+                    if rules:
+                        # Cache the result
+                        self._site_rules_cache[site_id] = rules
+                        logger.debug(f"Loaded {len(rules)} rules from database for site {site_id}")
+                        return rules.copy()
+                    else:
+                        logger.debug(f"No rules found in database for site {site_id}, falling back to file")
+            except Exception as e:
+                logger.warning(f"Failed to load rules from database for site {site_id}: {e}, falling back to file")
+
+        # Fallback to file if database has no rules
+        if not self.site_rules_dir:
+            return []
+
+        rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+        if not rules_file.exists():
+            logger.debug(f"No site-specific rules file found for {site_id}")
+            return []
+
+        try:
+            with open(rules_file, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+            rules = config.get("rules", [])
+            
+            # Cache the result
+            self._site_rules_cache[site_id] = rules
+            if rules:
+                logger.debug(f"Loaded {len(rules)} rules from file for site {site_id}")
+            return rules.copy()
+        except Exception as e:
+            logger.error(f"Failed to load site rules from file for {site_id}: {e}", exc_info=True)
+            return []
+
+    def add_site_rule(self, site_id: str, rule: Dict[str, Any]) -> bool:
+        """
+        Add a rule to a site's rules file
+
+        Args:
+            site_id: Site ID
+            rule: Rule configuration dictionary
+
+        Returns:
+            True if rule was added successfully, False otherwise
+        """
+        if not self.site_rules_dir:
+            logger.error("Site rules directory not configured")
+            return False
+
+        if not self.site_exists(site_id):
+            logger.warning(f"Site {site_id} does not exist")
+            return False
+
+        try:
+            # Load existing rules
+            rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+            existing_rules = []
+            if rules_file.exists():
+                with open(rules_file, "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f) or {}
+                    existing_rules = config.get("rules", [])
+
+            # Check if rule with same ID already exists
+            rule_id = rule.get("id")
+            if rule_id:
+                for existing_rule in existing_rules:
+                    if existing_rule.get("id") == rule_id:
+                        logger.warning(f"Rule with ID {rule_id} already exists for site {site_id}")
+                        return False
+
+            # Ensure rule has consistent alarm_type in metadata
+            if "metadata" not in rule:
+                rule["metadata"] = {}
+            
+            # If alarm_type is not set, generate it from rule name
+            if "alarm_type" not in rule.get("metadata", {}):
+                rule_name = rule.get("name", "Unknown")
+                alarm_type = rule_name.lower().replace(" ", "_").replace("-", "_")
+                rule["metadata"]["alarm_type"] = alarm_type
+                logger.debug(f"Auto-generated alarm_type '{alarm_type}' from rule name '{rule_name}'")
+
+            # Add new rule
+            existing_rules.append(rule)
+
+            # Save to file
+            config = {"rules": existing_rules}
+            self.site_rules_dir.mkdir(parents=True, exist_ok=True)
+            with open(rules_file, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+            # Also save to container (database) - dual write
+            if self._container_manager:
+                try:
+                    container = self._container_manager.get_container(site_id, auto_create=True)
+                    if container:
+                        container.write_rule(rule, flush=True)
+                        logger.debug(f"Saved rule {rule_id} to container for site {site_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to save rule to container for site {site_id}: {e}")
+
+            # Clear cache in SiteManager
+            if site_id in self._site_rules_cache:
+                del self._site_rules_cache[site_id]
+            
+            # Also clear cache in SiteRuleManager if available
+            # This ensures rule engine picks up the new rule immediately
+            if self._container_manager:
+                try:
+                    from ..agent.dependencies import get_app_state
+                    app_state = get_app_state()
+                    rule_engine = app_state.get("rule_engine")
+                    if rule_engine and hasattr(rule_engine, "site_rule_manager"):
+                        rule_engine.site_rule_manager.reload_site_rules(site_id)
+                        logger.debug(f"Cleared rule cache in SiteRuleManager for site {site_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to clear rule cache in SiteRuleManager: {e}")
+
+            logger.info(f"Added rule {rule_id or 'unnamed'} to site {site_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add rule to site {site_id}: {e}", exc_info=True)
+            return False
+
+    def update_site_rule(self, site_id: str, rule_id: str, rule: Dict[str, Any]) -> bool:
+        """
+        Update an existing rule in a site
+        Updates rule in InfluxDB container (primary) and optionally in files (backward compatibility)
+
+        Args:
+            site_id: Site ID
+            rule_id: Rule ID to update
+            rule: Updated rule configuration dictionary
+
+        Returns:
+            True if rule was updated successfully, False otherwise
+        """
+        if not self.site_exists(site_id):
+            logger.warning(f"Site {site_id} does not exist")
+            return False
+
+        try:
+            # Ensure rule_id is preserved
+            rule["id"] = rule_id
+
+            # Ensure rule has consistent alarm_type in metadata
+            if "metadata" not in rule:
+                rule["metadata"] = {}
+            
+            # If alarm_type is not set, generate it from rule name
+            if "alarm_type" not in rule.get("metadata", {}):
+                rule_name = rule.get("name", "Unknown")
+                alarm_type = rule_name.lower().replace(" ", "_").replace("-", "_")
+                rule["metadata"]["alarm_type"] = alarm_type
+                logger.debug(f"Auto-generated alarm_type '{alarm_type}' from rule name '{rule_name}'")
+
+            # Try to update in container (database) first - primary storage
+            rule_found = False
+            if self._container_manager:
+                try:
+                    container = self._container_manager.get_container(site_id, auto_create=True)
+                    if container:
+                        # Check if rule exists
+                        existing_rules = container.query_rules(rule_id=rule_id)
+                        if existing_rules:
+                            # Rule exists, update it
+                            container.write_rule(rule, flush=True)
+                            rule_found = True
+                            logger.debug(f"Updated rule {rule_id} in container for site {site_id}")
+                        else:
+                            # Rule not found in container, check if it exists in files
+                            logger.debug(f"Rule {rule_id} not found in container for site {site_id}, checking files")
+                except Exception as e:
+                    logger.warning(f"Failed to update rule in container for site {site_id}: {e}")
+
+            # Also check/update in file if site_rules_dir is configured (backward compatibility)
+            # This handles cases where rule exists in file but not in container yet
+            if self.site_rules_dir:
+                try:
+                    rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+                    if rules_file.exists():
+                        with open(rules_file, "r", encoding="utf-8") as f:
+                            config = yaml.safe_load(f) or {}
+                            existing_rules = config.get("rules", [])
+
+                        # Find and update the rule
+                        file_rule_found = False
+                        for i, existing_rule in enumerate(existing_rules):
+                            if existing_rule.get("id") == rule_id:
+                                existing_rules[i] = rule
+                                file_rule_found = True
+                                break
+
+                        if file_rule_found:
+                            # Save to file
+                            config = {"rules": existing_rules}
+                            with open(rules_file, "w", encoding="utf-8") as f:
+                                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                            logger.debug(f"Updated rule {rule_id} in file for site {site_id}")
+                            
+                            # If container update failed, also write to container now
+                            if not rule_found and self._container_manager:
+                                try:
+                                    container = self._container_manager.get_container(site_id, auto_create=True)
+                                    if container:
+                                        container.write_rule(rule, flush=True)
+                                        logger.debug(f"Wrote rule {rule_id} to container from file update")
+                                except Exception as e:
+                                    logger.warning(f"Failed to write rule to container after file update: {e}")
+                            
+                            rule_found = file_rule_found
+                    else:
+                        logger.debug(f"Rules file not found for site {site_id}, skipping file update")
+                except Exception as e:
+                    logger.warning(f"Failed to update rule in file for site {site_id}: {e}")
+
+            if not rule_found:
+                logger.warning(f"Rule with ID {rule_id} not found for site {site_id}")
+                return False
+
+            # Clear related alarms when rule is updated
+            # This ensures that old alarms based on the previous rule configuration are removed
+            if self._container_manager:
+                try:
+                    container = self._container_manager.get_container(site_id, auto_create=False)
+                    if container:
+                        # Delete alarms by rule_id (matches both metadata.rule_id and alarm_id prefix)
+                        deleted_count = container.delete_alarms(rule_id=rule_id)
+                        
+                        # Also try to delete by base rule_id if rule_id contains device suffix
+                        # e.g., if rule_id is "RULE_BMS_006_BMS_001", also try "RULE_BMS_006"
+                        # This handles cases where alarms were created with base rule_id
+                        if "_" in rule_id and rule_id.startswith("RULE_"):
+                            # Extract base rule_id (e.g., "RULE_BMS_006" from "RULE_BMS_006_BMS_001")
+                            parts = rule_id.split("_")
+                            if len(parts) >= 3:
+                                # Try base rule_id (first 3 parts: RULE_BMS_006)
+                                base_rule_id = "_".join(parts[:3])
+                                if base_rule_id != rule_id:
+                                    base_deleted = container.delete_alarms(rule_id=base_rule_id)
+                                    if base_deleted > 0:
+                                        logger.info(f"Cleared {base_deleted} additional alarms for base rule {base_rule_id} in site {site_id}")
+                                        deleted_count += base_deleted
+                        
+                        if deleted_count > 0:
+                            logger.info(f"Cleared {deleted_count} old alarms for updated rule {rule_id} in site {site_id}")
+                        else:
+                            logger.debug(f"No alarms found to delete for rule {rule_id} in site {site_id} (may already be cleared or rule_id doesn't match)")
+                except Exception as e:
+                    logger.warning(f"Failed to clear old alarms for rule {rule_id} in site {site_id}: {e}")
+
+            # Clear cache
+            if site_id in self._site_rules_cache:
+                del self._site_rules_cache[site_id]
+
+            logger.info(f"Updated rule {rule_id} for site {site_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update rule for site {site_id}: {e}", exc_info=True)
+            return False
+
+    def delete_site_rule(self, site_id: str, rule_id: str) -> bool:
+        """
+        Delete a rule from a site's rules file
+
+        Args:
+            site_id: Site ID
+            rule_id: Rule ID to delete
+
+        Returns:
+            True if rule was deleted successfully, False otherwise
+        """
+        if not self.site_rules_dir:
+            logger.error("Site rules directory not configured")
+            return False
+
+        if not self.site_exists(site_id):
+            logger.warning(f"Site {site_id} does not exist")
+            return False
+
+        try:
+            # Load existing rules
+            rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+            if not rules_file.exists():
+                logger.warning(f"Rules file not found for site {site_id}")
+                return False
+
+            with open(rules_file, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+                existing_rules = config.get("rules", [])
+
+            # Find and remove the rule
+            original_count = len(existing_rules)
+            existing_rules = [r for r in existing_rules if r.get("id") != rule_id]
+
+            if len(existing_rules) == original_count:
+                logger.warning(f"Rule with ID {rule_id} not found for site {site_id}")
+                return False
+
+            # Save to file
+            config = {"rules": existing_rules}
+            with open(rules_file, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+            # Also delete from container (database) - dual write
+            if self._container_manager:
+                try:
+                    container = self._container_manager.get_container(site_id, auto_create=False)
+                    if container:
+                        container.delete_rule(rule_id)
+                        logger.debug(f"Deleted rule {rule_id} from container for site {site_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete rule from container for site {site_id}: {e}")
+
+            # Clear cache
+            if site_id in self._site_rules_cache:
+                del self._site_rules_cache[site_id]
+
+            logger.info(f"Deleted rule {rule_id} from site {site_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete rule from site {site_id}: {e}", exc_info=True)
+            return False
+
+    def site_exists(self, site_id: str) -> bool:
+        """
+        Check if site exists
+        Checks both site configuration and bucket existence
+        Always queries fresh data, ignoring cache
+
+        Args:
+            site_id: Site ID
+
+        Returns:
+            True if site exists, False otherwise
+        """
+        # Clear cache for this site to ensure fresh check
+        self._site_configs_cache.pop(site_id, None)
+        
+        # Check InfluxDB first (fresh query, no cache)
+        if self._influx_storage:
+            try:
+                site_data = self._influx_storage.get_site(site_id)
+                if site_data:
+                    logger.debug(f"Site {site_id} exists in InfluxDB")
+                    return True
+            except Exception as e:
+                logger.warning(f"Failed to check site in InfluxDB: {e}")
+
+        # Check files
+        if self.site_rules_dir:
+            config_file = self.site_rules_dir / f"{site_id}_config.yaml"
+            if config_file.exists():
+                logger.debug(f"Site {site_id} exists in files")
+                return True
+        
+        # Also check if bucket exists (in case site config was deleted but bucket remains)
+        # This prevents orphaned buckets from blocking site creation
+        if self._container_manager:
+            try:
+                container = self._container_manager.get_container(site_id, auto_create=False)
+                if container and container.exists():
+                    # Bucket exists but site config doesn't - this is an orphaned bucket
+                    # We'll allow site creation to proceed and clean up the bucket
+                    logger.warning(f"Found orphaned bucket for site {site_id} (site config missing)")
+                    return False  # Return False to allow site recreation
+            except Exception as e:
+                logger.debug(f"Error checking bucket existence for site {site_id}: {e}")
+        
+        logger.debug(f"Site {site_id} does not exist")
+        return False
+
+    def reload_site(self, site_id: str):
+        """
+        Reload site configuration from file
+
+        Args:
+            site_id: Site ID
+        """
+        if site_id in self._site_configs_cache:
+            del self._site_configs_cache[site_id]
+        if site_id in self._site_rules_cache:
+            del self._site_rules_cache[site_id]
+        logger.info(f"Reloaded site configuration for {site_id}")
+
+    def reload_all_sites(self):
+        """Reload all site configurations"""
+        self._site_configs_cache.clear()
+        self._site_rules_cache.clear()
+        logger.info("Reloaded all site configurations")
+
+    def create_site(self, site_data: Dict[str, Any]) -> bool:
+        """
+        Create a new site configuration
+        Saves to InfluxDB (primary) and optionally to files (backward compatibility)
+
+        Args:
+            site_data: Dictionary containing site configuration data
+
+        Returns:
+            True if site was created successfully, False otherwise
+        """
+        # Ensure directory exists if site_rules_dir is configured
+        if self.site_rules_dir:
+            self.site_rules_dir.mkdir(parents=True, exist_ok=True)
+
+        site_id = site_data.get("site_id")
+        if not site_id:
+            logger.error("site_id is required")
+            return False
+
+        # Clear cache before checking to ensure fresh data
+        self._site_configs_cache.pop(site_id, None)
+        logger.debug(f"Cleared cache for site {site_id} before create_site check")
+
+        # Check if site already exists
+        if self.site_exists(site_id):
+            logger.warning(f"Site {site_id} already exists (checked after cache clear)")
+            return False
+
+        # Prepare config data
+        config = {
+            "site_id": site_id,
+            "site_name": site_data.get("site_name", site_id),
+            "location": site_data.get("location", ""),
+            "timezone": site_data.get("timezone", "UTC"),
+            "climate": site_data.get("climate", ""),
+        }
+
+        # Add optional fields
+        if "latitude" in site_data:
+            config["latitude"] = site_data["latitude"]
+        if "longitude" in site_data:
+            config["longitude"] = site_data["longitude"]
+        if "country" in site_data:
+            config["country"] = site_data["country"]
+        if "state" in site_data:
+            config["state"] = site_data["state"]
+
+        # Add default settings
+        config["settings"] = {
+            "data_collection_interval": 30,
+            "alarm_cooldown_period": 300,
+            "max_alarm_rate": 10,
+            "enable_cross_site_analysis": True,
+        }
+
+        # Add default device configurations
+        config["devices"] = {
+            "BMS": {"enabled": True, "collection_interval": 30},
+            "PCS": {"enabled": True, "collection_interval": 30},
+            "UPS": {"enabled": False},
+            "TMS": {"enabled": True, "collection_interval": 60},
+        }
+
+        # Save to InfluxDB (primary storage) - required
+        if not self._influx_storage:
+            logger.error("InfluxDB storage not configured, cannot create site")
+            return False
+        
+        try:
+            if not self._influx_storage.save_site(config):
+                logger.error(f"Failed to save site to InfluxDB: {site_id}")
+                return False
+            logger.info(f"Created site in InfluxDB: {site_id}")
+        except Exception as e:
+            logger.error(f"Error saving site to InfluxDB: {e}", exc_info=True)
+            return False
+
+        # Also save to file (backward compatibility, optional)
+        if self.site_rules_dir:
+            config_file = self.site_rules_dir / f"{site_id}_config.yaml"
+            try:
+                self.site_rules_dir.mkdir(parents=True, exist_ok=True)
+                with open(config_file, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                logger.info(f"Created site config file: {site_id}")
+            except Exception as e:
+                logger.warning(f"Failed to create site config file for {site_id}: {e}")
+        
+        # Clear cache for this site
+        if site_id in self._site_configs_cache:
+            del self._site_configs_cache[site_id]
+        
+        logger.info(f"Created site configuration for {site_id}")
+        return True
+    
+    def load_universal_rules_to_site(self, site_id: str, universal_rules_file: str = "config/rules_universal.yaml") -> int:
+        """
+        Load only EMS (site-level) rules from file to site container database.
+        Device-specific rules are created when devices are added.
+        
+        Args:
+            site_id: Site ID
+            universal_rules_file: Path to universal rules YAML file
+            
+        Returns:
+            Number of rules loaded
+        """
+        if not self._container_manager:
+            logger.warning(f"Cannot load universal rules: container manager not available")
+            return 0
+        
+        try:
+            # Load universal rules from file
+            rules_file = Path(universal_rules_file)
+            if not rules_file.exists():
+                logger.warning(f"Universal rules file not found: {universal_rules_file}")
+                return 0
+            
+            with open(rules_file, "r", encoding="utf-8") as f:
+                rules_config = yaml.safe_load(f)
+            
+            all_rules = rules_config.get("rules", [])
+            if not all_rules:
+                logger.warning(f"No rules found in universal rules file: {universal_rules_file}")
+                return 0
+            
+            # Filter only EMS (site-level) rules
+            ems_rules = []
+            for rule in all_rules:
+                rule_device_types = rule.get("device_types", [])
+                # Only load rules that have EMS in device_types (site-level rules)
+                if rule_device_types and "EMS" in rule_device_types:
+                    ems_rules.append(rule)
+            
+            if not ems_rules:
+                logger.info(f"No EMS rules found in universal rules file for site {site_id}")
+                return 0
+            
+            # Get site container
+            container = self._container_manager.get_container(site_id, auto_create=True)
+            if not container:
+                logger.error(f"Failed to get container for site {site_id}")
+                return 0
+            
+            # Check if rules already exist
+            existing_rules = container.query_rules()
+            existing_rule_ids = {rule.get("id") for rule in existing_rules if rule.get("id")}
+            
+            # Write only EMS rules to container database
+            loaded_count = 0
+            skipped_count = 0
+            for rule in ems_rules:
+                rule_id = rule.get("id")
+                if not rule_id:
+                    logger.warning(f"Skipping rule without ID: {rule.get('name', 'Unknown')}")
+                    continue
+                
+                # Skip if rule already exists
+                if rule_id in existing_rule_ids:
+                    skipped_count += 1
+                    logger.debug(f"Rule {rule_id} already exists in site {site_id}, skipping")
+                    continue
+                
+                # Write rule to container
+                if container.write_rule(rule, flush=False):
+                    loaded_count += 1
+                    logger.debug(f"Loaded EMS rule {rule_id} to site {site_id}")
+                else:
+                    logger.warning(f"Failed to write rule {rule_id} to site {site_id}")
+            
+            # Flush remaining rules
+            if loaded_count > 0:
+                container.influx_client.write_api.write(
+                    bucket=container.bucket,
+                    org=container.influx_client.org,
+                    record=container.influx_client._write_buffer
+                )
+                container.influx_client._write_buffer = []
+            
+            # Clear cache for this site
+            if site_id in self._site_rules_cache:
+                del self._site_rules_cache[site_id]
+            
+            logger.info(f"Loaded {loaded_count} universal rules to site {site_id} (skipped {skipped_count} existing rules)")
+            return loaded_count
+            
+        except Exception as e:
+            logger.error(f"Failed to load universal rules to site {site_id}: {e}", exc_info=True)
+            return 0
+    
+    def create_device_rules(self, device_id: str, device_type: str, site_id: str) -> int:
+        """
+        Create rules for a specific device based on its device type.
+        Each device gets its own copy of rules in the database with device_ids set.
+        EMS rules are excluded as they are site-level only.
+        
+        Args:
+            device_id: Device ID
+            device_type: Device type (e.g., "BMS", "PCS")
+            site_id: Site ID
+            
+        Returns:
+            Number of rules created
+        """
+        # EMS is site-level only, don't create device-specific rules for EMS
+        if device_type.upper() == "EMS":
+            logger.info(f"EMS is site-level only, skipping device-specific rule creation for {device_id}")
+            return 0
+        
+        if not self._container_manager:
+            logger.warning(f"Cannot create device rules: container manager not available")
+            return 0
+        
+        try:
+            # Load universal rules from file
+            rules_file = Path("config/rules_universal.yaml")
+            if not rules_file.exists():
+                logger.warning(f"Universal rules file not found: config/rules_universal.yaml")
+                return 0
+            
+            with open(rules_file, "r", encoding="utf-8") as f:
+                rules_config = yaml.safe_load(f)
+            
+            all_rules = rules_config.get("rules", [])
+            if not all_rules:
+                logger.warning(f"No rules found in universal rules file")
+                return 0
+            
+            # Filter rules applicable to this device type (exclude EMS rules)
+            applicable_rules = []
+            for rule in all_rules:
+                rule_device_types = rule.get("device_types", [])
+                # Skip EMS rules - they are site-level only
+                if rule_device_types and "EMS" in rule_device_types:
+                    continue
+                # Only include rules that match this device type
+                if rule_device_types and device_type.upper() in rule_device_types:
+                    # Create a copy of the rule for this specific device
+                    device_rule = rule.copy()
+                    # Set device_ids to ensure rule only applies to this device
+                    device_rule["device_ids"] = [device_id]
+                    # Generate unique rule ID for this device
+                    original_id = device_rule.get("id", "")
+                    if original_id:
+                        device_rule["id"] = f"{original_id}_{device_id}"
+                    applicable_rules.append(device_rule)
+            
+            if not applicable_rules:
+                logger.info(f"No applicable rules found for device {device_id} (type={device_type})")
+                return 0
+            
+            # Get site container
+            container = self._container_manager.get_container(site_id, auto_create=True)
+            if not container:
+                logger.error(f"Failed to get container for site {site_id}")
+                return 0
+            
+            # Check existing rules for this device
+            existing_rules = container.query_rules()
+            existing_rule_ids = {rule.get("id") for rule in existing_rules if rule.get("id")}
+            
+            # Write device-specific rules to container database
+            created_count = 0
+            for rule in applicable_rules:
+                rule_id = rule.get("id")
+                if not rule_id:
+                    continue
+                
+                # Skip if rule already exists for this device
+                if rule_id in existing_rule_ids:
+                    logger.debug(f"Rule {rule_id} already exists for device {device_id}, skipping")
+                    continue
+                
+                # Write rule to container
+                if container.write_rule(rule, flush=False):
+                    created_count += 1
+                    logger.debug(f"Created rule {rule_id} for device {device_id}")
+            
+            # Flush all rules at once
+            container.flush_rules()
+            
+            # Clear cache for this site to ensure fresh data on next query
+            if site_id in self._site_rules_cache:
+                del self._site_rules_cache[site_id]
+            
+            logger.info(f"Created {created_count} rules for device {device_id} (type={device_type}) in site {site_id}")
+            return created_count
+        except Exception as e:
+            logger.error(f"Failed to create rules for device {device_id}: {e}", exc_info=True)
+            return 0
+
+    def delete_site(self, site_id: str) -> bool:
+        """
+        Delete a site configuration and its rules file
+
+        Args:
+            site_id: Site ID to delete
+
+        Returns:
+            True if site was deleted successfully, False otherwise
+        """
+        if not self.site_rules_dir:
+            logger.error("Site rules directory not configured")
+            return False
+
+        if not self.site_exists(site_id):
+            logger.warning(f"Site {site_id} does not exist")
+            return False
+
+        try:
+            # Delete from InfluxDB (primary storage)
+            if self._influx_storage:
+                try:
+                    if self._influx_storage.delete_site(site_id):
+                        logger.info(f"Deleted site from InfluxDB: {site_id}")
+                except Exception as e:
+                    logger.error(f"Error deleting site from InfluxDB: {e}", exc_info=True)
+
+            # Also delete files (backward compatibility)
+            if self.site_rules_dir:
+                config_file = self.site_rules_dir / f"{site_id}_config.yaml"
+                if config_file.exists():
+                    config_file.unlink()
+                    logger.info(f"Deleted site config file: {config_file}")
+
+                rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+                if rules_file.exists():
+                    rules_file.unlink()
+                    logger.info(f"Deleted site rules file: {rules_file}")
+
+            # Clear cache
+            if site_id in self._site_configs_cache:
+                del self._site_configs_cache[site_id]
+            if site_id in self._site_rules_cache:
+                del self._site_rules_cache[site_id]
+
+            logger.info(f"Successfully deleted site {site_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete site {site_id}: {e}", exc_info=True)
+            return False
+
+    def update_site(self, site_id: str, site_data: Dict[str, Any]) -> bool:
+        """
+        Update site configuration
+
+        Args:
+            site_id: Site ID to update
+            site_data: Dictionary containing updated site configuration data
+
+        Returns:
+            True if site was updated successfully, False otherwise
+        """
+        if not self.site_rules_dir:
+            logger.error("Site rules directory not configured")
+            return False
+
+        if not self.site_exists(site_id):
+            logger.warning(f"Site {site_id} does not exist")
+            return False
+
+        try:
+            # Load existing config
+            config_file = self.site_rules_dir / f"{site_id}_config.yaml"
+            existing_config = {}
+            if config_file.exists():
+                with open(config_file, "r", encoding="utf-8") as f:
+                    existing_config = yaml.safe_load(f) or {}
+
+            # Merge with new data (don't overwrite site_id)
+            updated_config = {**existing_config, **site_data}
+            updated_config["site_id"] = site_id  # Ensure site_id is preserved
+
+            # Save to InfluxDB (primary storage)
+            if self._influx_storage:
+                try:
+                    if self._influx_storage.save_site(updated_config):
+                        logger.info(f"Updated site in InfluxDB: {site_id}")
+                    else:
+                        logger.warning(f"Failed to update site in InfluxDB: {site_id}")
+                except Exception as e:
+                    logger.error(f"Error updating site in InfluxDB: {e}", exc_info=True)
+
+            # Also update file (backward compatibility)
+            if self.site_rules_dir:
+                config_file = self.site_rules_dir / f"{site_id}_config.yaml"
+                try:
+                    with open(config_file, "w", encoding="utf-8") as f:
+                        yaml.dump(updated_config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                    logger.info(f"Updated site config file: {site_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to update site config file for {site_id}: {e}")
+
+            # Clear cache
+            if site_id in self._site_configs_cache:
+                del self._site_configs_cache[site_id]
+
+            logger.info(f"Updated site configuration for {site_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update site config for {site_id}: {e}", exc_info=True)
+            return False
+

@@ -657,6 +657,21 @@ class InfluxDBClient:
         elif not self.use_async:
             logger.debug("  [InfluxDB] Sync mode - no buffer to flush")
 
+    def _get_bucket_for_query(self, site_id: Optional[str] = None) -> str:
+        """
+        Get bucket name for query based on site_id and container mode
+        
+        Args:
+            site_id: Site ID (optional)
+            
+        Returns:
+            Bucket name to use for query
+        """
+        # If site_id is provided and default bucket is "alarms", use site-specific bucket
+        if site_id and self.bucket == "alarms":
+            return f"site_{site_id}"
+        return self.bucket
+
     def query_alarms(
         self,
         start_time: Optional[str] = None,
@@ -679,7 +694,7 @@ class InfluxDBClient:
             alarm_type: Filter by alarm type
             severity: Filter by severity (Info, Warning, Critical)
             source: Filter by source (BMS, PCS, EMS)
-            site_id: Filter by site ID
+            site_id: Filter by site ID (also determines bucket in container mode)
             limit: Maximum number of results
             
         Returns:
@@ -689,8 +704,11 @@ class InfluxDBClient:
             return []
         
         try:
+            # Get bucket name based on site_id and container mode
+            bucket_name = self._get_bucket_for_query(site_id)
+            
             # Build Flux query
-            query = f'from(bucket: "{self.bucket}")'
+            query = f'from(bucket: "{bucket_name}")'
             query += ' |> range(start: -30d)'  # Default range
             
             if start_time:
@@ -777,8 +795,11 @@ class InfluxDBClient:
             return []
         
         try:
+            # Get bucket name based on site_id and container mode
+            bucket_name = self._get_bucket_for_query(site_id)
+            
             # Build Flux query
-            query = f'from(bucket: "{self.bucket}")'
+            query = f'from(bucket: "{bucket_name}")'
             query += ' |> range(start: -30d)'
             
             if start_time:
@@ -882,6 +903,7 @@ class InfluxDBClient:
         interval: str = "1h",  # "1h", "1d", etc.
         metric_type: str = "alarms",  # "alarms", "diagnostics", "devices"
         group_by: Optional[str] = None,  # "severity", "risk_level", "status", etc.
+        site_id: Optional[str] = None,  # Site ID for container mode
         limit: int = 1000,
     ) -> List[Dict[str, Any]]:
         """
@@ -893,6 +915,7 @@ class InfluxDBClient:
             interval: Time interval for aggregation (e.g., "1h", "1d", "5m")
             metric_type: Type of metric ("alarms", "diagnostics", "devices")
             group_by: Optional field to group by (e.g., "severity", "risk_level")
+            site_id: Site ID for container mode (optional)
             limit: Maximum number of results
             
         Returns:
@@ -906,8 +929,11 @@ class InfluxDBClient:
             if not start_time:
                 start_time = "-24h"
             
+            # Get bucket name based on site_id and container mode
+            bucket_name = self._get_bucket_for_query(site_id)
+            
             # Build Flux query
-            query = f'from(bucket: "{self.bucket}")'
+            query = f'from(bucket: "{bucket_name}")'
             query += f' |> range(start: {start_time}'
             if end_time:
                 query += f', stop: {end_time}'
@@ -995,8 +1021,11 @@ class InfluxDBClient:
             if not start_time:
                 start_time = "-24h"
             
+            # Get bucket name based on site_id and container mode
+            bucket_name = self._get_bucket_for_query(site_id)
+            
             # Build Flux query
-            query = f'from(bucket: "{self.bucket}")'
+            query = f'from(bucket: "{bucket_name}")'
             query += f' |> range(start: {start_time}'
             if end_time:
                 query += f', stop: {end_time}'

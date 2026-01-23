@@ -62,6 +62,7 @@ def register_diagnostic_routes(app):
                     container = agent_service.container_manager.get_container(site_id, auto_create=False)
                     if container:
                         # Query from site container (no need for site_id filter)
+                        # Set deduplicate=False to show all diagnostics, not just the latest one per (device_id, alarm_type)
                         diagnostics = container.query_diagnostics(
                             start_time=start_time,
                             end_time=end_time,
@@ -69,6 +70,7 @@ def register_diagnostic_routes(app):
                             risk_level=risk_level,
                             device_type=device_type,
                             limit=limit + offset,
+                            deduplicate=False,  # Show all diagnostics, not just latest
                         )
                         total_count = len(container.query_diagnostics(
                             start_time=start_time,
@@ -77,6 +79,7 @@ def register_diagnostic_routes(app):
                             risk_level=risk_level,
                             device_type=device_type,
                             limit=10000,
+                            deduplicate=False,  # Show all diagnostics for count
                         ))
                     else:
                         # Container doesn't exist, return empty
@@ -101,6 +104,7 @@ def register_diagnostic_routes(app):
                                     risk_level=risk_level,
                                     device_type=device_type,
                                     limit=10000,
+                                    deduplicate=False,  # Show all diagnostics, not just latest
                                 )
                         except Exception as e:
                             logger.warning(f"Failed to query diagnostics from container {container_site_id}: {e}")

@@ -1,0 +1,61 @@
+================================================================================
+BESS Alarm Notification
+================================================================================
+
+Alarm Information
+--------------------------------------------------------------------------------
+Alarm ID: {{ alarm_id }}
+Alarm Type: {{ alarm_type }}
+Severity: {{ severity }}
+Timestamp: {{ timestamp }}
+Source: {{ alarm.source }}
+{% if alarm.metadata.site_id %}Site: {{ alarm.metadata.site_id }} ({{ alarm.metadata.site_name or '' }})
+{% endif %}
+
+{% if diagnostic %}
+Diagnostic Report
+--------------------------------------------------------------------------------
+Risk Level: {{ diagnostic.risk_level }}
+Current Status: {{ diagnostic.current_status }}
+
+{% if diagnostic.possible_causes %}
+Possible Causes:
+{% for cause in diagnostic.possible_causes[:3] %}
+  {{ loop.index }}. {{ cause }}
+{% endfor %}
+{% endif %}
+
+{% if diagnostic.recommended_actions %}
+Recommended Actions:
+{% for action in diagnostic.recommended_actions[:5] %}
+  {{ loop.index }}. {{ action }}
+{% endfor %}
+{% endif %}
+
+{% if diagnostic.references %}
+References:
+{% for ref in diagnostic.references %}
+  - {{ ref }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if device_data %}
+Device Data
+--------------------------------------------------------------------------------
+{% for key, value in device_data.items() %}
+{% if key not in ['labels', 'annotations', 'metadata'] %}
+{{ key }}: {{ value }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if grafana_url %}
+View in Grafana: {{ grafana_url }}
+{% endif %}
+
+================================================================================
+This is an automated notification from BESS Alarm Diagnostic Agent.
+Generated at: {{ diagnostic.generated_at if diagnostic else timestamp }}
+================================================================================
+

@@ -1,0 +1,269 @@
+version: "3.8"
+
+services:
+  # InfluxDB - Time series database
+  influxdb:
+    image: influxdb:2.7
+    container_name: bess-influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:-changeme}
+      - DOCKER_INFLUXDB_INIT_ORG=bess
+      - DOCKER_INFLUXDB_INIT_BUCKET=alarms
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:-changeme}
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bess-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # PostgreSQL - Relational database
+  postgresql:
+    image: postgres:15-alpine
+    container_name: bess-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=bess_agent
+      - POSTGRES_USER=${DB_USER:-bess_agent}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bess_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bess-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Redis - Cache
+  redis:
+    image: redis:7-alpine
+    container_name: bess-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bess-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # EMQX - MQTT Broker
+  emqx:
+    image: emqx/emqx:5.3.0
+    container_name: bess-emqx
+    ports:
+      - "1883:1883"   # MQTT port
+      - "8083:8083"   # MQTT over WebSocket
+      - "8084:8084"   # MQTT over SSL
+      - "18083:18083" # Dashboard
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - emqx-log:/opt/emqx/log
+    environment:
+      - EMQX_NAME=emqx
+      - EMQX_HOST=emqx
+      - EMQX_CLUSTER__DISCOVERY_STRATEGY=static
+      - EMQX_CLUSTER__STATIC__SEEDS=emqx@emqx
+      - EMQX_LOG__LEVEL=warning
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=${EMQX_ADMIN_USER:-admin}
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=${EMQX_ADMIN_PASSWORD:-public}
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bess-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Grafana - Data visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: bess-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - grafana-config:/etc/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=
+    depends_on:
+      - influxdb
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - bess-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Agent service
+  # agent-service:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile
+  #   container_name: bess-agent
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - ../config:/app/config
+  #     - ../prompts:/app/prompts
+  #     - ../templates:/app/templates
+  #     - ../logs:/app/logs
+  #   environment:
+  #     - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+  #     - INFLUXDB_URL=${INFLUXDB_URL:-http://influxdb:8086}
+  #     - INFLUXDB_ORG=${INFLUXDB_ORG:-bess}
+  #     - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-alarms}
+  #     - DB_USER=${DB_USER:-bess_agent}
+  #     - DB_PASSWORD=${DB_PASSWORD}
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - GRAFANA_API_KEY=${GRAFANA_API_KEY}
+  #     - SMTP_USER=${SMTP_USER}
+  #     - SMTP_PASSWORD=${SMTP_PASSWORD}
+  #     - BMS_API_URL=${BMS_API_URL}
+  #     - BMS_API_KEY=${BMS_API_KEY}
+  #     - PCS_API_URL=${PCS_API_URL}
+  #     - PCS_API_KEY=${PCS_API_KEY}
+  #     - EMS_API_URL=${EMS_API_URL}
+  #     - EMS_API_KEY=${EMS_API_KEY}
+  #     - MQTT_BROKER_URL=${MQTT_BROKER_URL:-mqtt://emqx:1883}
+  #     - MQTT_USERNAME=${MQTT_USERNAME:-}
+  #     - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+  #     - MQTT_CLIENT_ID=${MQTT_CLIENT_ID:-bess-agent-datacenter}
+  #   depends_on:
+  #     influxdb:
+  #       condition: service_healthy
+  #     postgresql:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     emqx:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
+  #   networks:
+  #     - bess-network
+  #   restart: unless-stopped
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2'
+  #         memory: 2G
+  #       reservations:
+  #         cpus: '0.5'
+  #         memory: 512M
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  postgres-data:
+  redis-data:
+  emqx-data:
+  emqx-log:
+  grafana-data:
+  grafana-config:
+
+networks:
+  bess-network:
+    driver: bridge

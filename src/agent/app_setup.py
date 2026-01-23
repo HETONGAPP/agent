@@ -172,6 +172,24 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠ Failed to initialize query cache: {e}, continuing without cache")
         set_app_state(query_cache=None)
 
+    # Initialize PostgreSQL database
+    postgres_metadata_storage = None
+    try:
+        from ..core.database import get_database
+        db_config = config.get("database", {})
+        pg_config = db_config.get("postgresql", {})
+        
+        if pg_config.get("password") or os.getenv("DB_PASSWORD"):
+            database = get_database(config=pg_config)
+            from ..storage.postgresql_metadata import PostgreSQLMetadataStorage
+            postgres_metadata_storage = PostgreSQLMetadataStorage(database)
+            logger.info("✓ PostgreSQL metadata storage initialized")
+        else:
+            logger.info("ℹ PostgreSQL not configured (no password), skipping PostgreSQL storage")
+    except Exception as e:
+        logger.warning(f"⚠ Failed to initialize PostgreSQL metadata storage: {e}")
+        postgres_metadata_storage = None
+
     # Initialize InfluxDB metadata storage
     influx_metadata_storage = None
     if influx_client:
@@ -192,6 +210,7 @@ async def lifespan(app: FastAPI):
         site_manager = SiteManager(
             site_rules_dir=site_rules_dir,
             influx_metadata_storage=influx_metadata_storage,
+            postgres_metadata_storage=postgres_metadata_storage,
             container_manager=None
         )
         
@@ -254,7 +273,10 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠ Email service initialization failed: {e}")
 
     # Initialize Device Registry
-    device_registry = DeviceRegistry(influx_metadata_storage=influx_metadata_storage)
+    device_registry = DeviceRegistry(
+        influx_metadata_storage=influx_metadata_storage,
+        postgres_metadata_storage=postgres_metadata_storage
+    )
     set_app_state(device_registry=device_registry)
     
     # Initialize device integrations

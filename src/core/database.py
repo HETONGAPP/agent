@@ -5,16 +5,18 @@ SQLAlchemy models for sites and devices persistence
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, JSON, Text, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy.orm import sessionmaker, Session, relationship, DeclarativeBase
 from sqlalchemy.pool import StaticPool
 import os
 
 logger = logging.getLogger(__name__)
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Base class for all database models"""
+    pass
 
 
 class SiteModel(Base):
@@ -48,7 +50,7 @@ class DeviceModel(Base):
     integration_name = Column(String(100))
     status = Column(String(50), default="registered")
     site_id = Column(String(100), ForeignKey("sites.site_id"), nullable=True)
-    metadata = Column(JSON)
+    device_metadata = Column("metadata", JSON)  # Use device_metadata as attribute name, but keep "metadata" as column name
     registered_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -60,21 +62,30 @@ class DeviceModel(Base):
 class Database:
     """Database connection and session management"""
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: Optional[str] = None, config: Optional[Dict[str, Any]] = None):
         """
         Initialize database connection
 
         Args:
             database_url: Database URL (e.g., postgresql://user:pass@host:port/db)
-                         If None, will try to construct from environment variables
+                         If None, will try to construct from environment variables or config
+            config: Optional configuration dictionary with database settings
         """
         if database_url is None:
-            # Try to get from environment or config
-            db_host = os.getenv("DB_HOST", "localhost")
-            db_port = os.getenv("DB_PORT", "5432")
-            db_user = os.getenv("DB_USER", "bess_agent")
-            db_password = os.getenv("DB_PASSWORD", "")
-            db_name = os.getenv("DB_NAME", "bess_agent")
+            # Try to get from config first
+            if config:
+                db_host = config.get("host", "localhost")
+                db_port = config.get("port", 5432)
+                db_user = config.get("user", "bess_agent")
+                db_password = config.get("password", "")
+                db_name = config.get("database", "bess_agent")
+            else:
+                # Try to get from environment variables
+                db_host = os.getenv("DB_HOST", "localhost")
+                db_port = os.getenv("DB_PORT", "5432")
+                db_user = os.getenv("DB_USER", "bess_agent")
+                db_password = os.getenv("DB_PASSWORD", "")
+                db_name = os.getenv("DB_NAME", "bess_agent")
             
             if db_password:
                 database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
@@ -137,11 +148,11 @@ class Database:
 _db_instance: Optional[Database] = None
 
 
-def get_database(database_url: Optional[str] = None) -> Database:
+def get_database(database_url: Optional[str] = None, config: Optional[Dict[str, Any]] = None) -> Database:
     """Get or create database instance"""
     global _db_instance
     if _db_instance is None:
-        _db_instance = Database(database_url)
+        _db_instance = Database(database_url, config)
         _db_instance.initialize()
     return _db_instance
 

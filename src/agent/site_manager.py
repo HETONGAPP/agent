@@ -12,31 +12,42 @@ logger = logging.getLogger(__name__)
 
 
 class SiteManager:
-    """Manages site configurations and operations with InfluxDB persistence"""
+    """Manages site configurations and operations with PostgreSQL (primary) and InfluxDB (secondary) persistence"""
 
-    def __init__(self, site_rules_dir: Optional[str] = None, influx_metadata_storage=None, container_manager=None):
+    def __init__(self, site_rules_dir: Optional[str] = None, influx_metadata_storage=None, postgres_metadata_storage=None, container_manager=None):
         """
         Initialize site manager
 
         Args:
             site_rules_dir: Directory containing site configuration files (for backward compatibility)
-            influx_metadata_storage: Optional InfluxDBMetadataStorage instance for persistence
+            influx_metadata_storage: Optional InfluxDBMetadataStorage instance for persistence (secondary)
+            postgres_metadata_storage: Optional PostgreSQLMetadataStorage instance for persistence (primary)
             container_manager: Optional SiteContainerManager instance for rule storage in containers
         """
         self.site_rules_dir = Path(site_rules_dir) if site_rules_dir else None
         self._site_configs_cache: Dict[str, Dict[str, Any]] = {}
         self._site_rules_cache: Dict[str, List[Dict[str, Any]]] = {}
-        self._influx_storage = influx_metadata_storage
+        self._postgres_storage = postgres_metadata_storage  # Primary storage
+        self._influx_storage = influx_metadata_storage  # Secondary storage (for backward compatibility)
         self._container_manager = container_manager
 
     def get_all_sites(self) -> List[Dict[str, Any]]:
         """
-        Get all sites from InfluxDB (preferred) or configuration files
+        Get all sites from PostgreSQL (preferred), InfluxDB (fallback), or configuration files
 
         Returns:
             List of site information dictionaries
         """
-        # Try InfluxDB first
+        # Try PostgreSQL first (primary storage)
+        if self._postgres_storage:
+            try:
+                sites = self._postgres_storage.get_all_sites()
+                if sites:
+                    return sites
+            except Exception as e:
+                logger.warning(f"Failed to load sites from PostgreSQL: {e}, trying InfluxDB")
+        
+        # Try InfluxDB as fallback
         if self._influx_storage:
             try:
                 sites = self._influx_storage.get_all_sites()
@@ -69,7 +80,7 @@ class SiteManager:
 
     def get_site(self, site_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get site information by site_id from InfluxDB (preferred) or files
+        Get site information by site_id from PostgreSQL (preferred), InfluxDB (fallback), or files
 
         Args:
             site_id: Site ID
@@ -81,13 +92,30 @@ class SiteManager:
         if site_id in self._site_configs_cache:
             return self._site_configs_cache[site_id].copy()
 
-        # Try InfluxDB first
+        # Try PostgreSQL first (primary storage)
+        if self._postgres_storage:
+            try:
+                site_data = self._postgres_storage.get_site(site_id)
+                if site_data:
+                    # Cache the result
+                    self._site_configs_cache[site_id] = site_data
+                    return site_data.copy()
+            except Exception as e:
+                logger.warning(f"Failed to load site from PostgreSQL: {e}, trying InfluxDB")
+
+        # Try InfluxDB as fallback
         if self._influx_storage:
             try:
                 site_data = self._influx_storage.get_site(site_id)
                 if site_data:
                     # Cache the result
                     self._site_configs_cache[site_id] = site_data
+                    # Sync to PostgreSQL if available
+                    if self._postgres_storage:
+                        try:
+                            self._postgres_storage.save_site(site_data)
+                        except Exception as e:
+                            logger.warning(f"Failed to sync site to PostgreSQL: {e}")
                     return site_data.copy()
             except Exception as e:
                 logger.warning(f"Failed to load site from InfluxDB: {e}, trying files")
@@ -471,7 +499,7 @@ class SiteManager:
     def site_exists(self, site_id: str) -> bool:
         """
         Check if site exists
-        Checks both site configuration and bucket existence
+        Checks PostgreSQL (primary), InfluxDB (fallback), files, and bucket existence
         Always queries fresh data, ignoring cache
 
         Args:
@@ -483,7 +511,17 @@ class SiteManager:
         # Clear cache for this site to ensure fresh check
         self._site_configs_cache.pop(site_id, None)
         
-        # Check InfluxDB first (fresh query, no cache)
+        # Check PostgreSQL first (primary storage)
+        if self._postgres_storage:
+            try:
+                site_data = self._postgres_storage.get_site(site_id)
+                if site_data:
+                    logger.debug(f"Site {site_id} exists in PostgreSQL")
+                    return True
+            except Exception as e:
+                logger.warning(f"Failed to check site in PostgreSQL: {e}")
+        
+        # Check InfluxDB (fallback)
         if self._influx_storage:
             try:
                 site_data = self._influx_storage.get_site(site_id)
@@ -493,7 +531,7 @@ class SiteManager:
             except Exception as e:
                 logger.warning(f"Failed to check site in InfluxDB: {e}")
 
-        # Check files
+        # Check files (backward compatibility)
         if self.site_rules_dir:
             config_file = self.site_rules_dir / f"{site_id}_config.yaml"
             if config_file.exists():
@@ -538,7 +576,7 @@ class SiteManager:
     def create_site(self, site_data: Dict[str, Any]) -> bool:
         """
         Create a new site configuration
-        Saves to InfluxDB (primary) and optionally to files (backward compatibility)
+        Saves to PostgreSQL (primary), InfluxDB (secondary), and optionally to files (backward compatibility)
 
         Args:
             site_data: Dictionary containing site configuration data
@@ -598,20 +636,31 @@ class SiteManager:
             "UPS": {"enabled": False},
             "TMS": {"enabled": True, "collection_interval": 60},
         }
+        config["devices_config"] = config["devices"]  # Also set devices_config for compatibility
 
-        # Save to InfluxDB (primary storage) - required
-        if not self._influx_storage:
-            logger.error("InfluxDB storage not configured, cannot create site")
-            return False
-        
-        try:
-            if not self._influx_storage.save_site(config):
-                logger.error(f"Failed to save site to InfluxDB: {site_id}")
+        # Save to PostgreSQL (primary storage) - preferred
+        if self._postgres_storage:
+            try:
+                if not self._postgres_storage.save_site(config):
+                    logger.error(f"Failed to save site to PostgreSQL: {site_id}")
+                    return False
+                logger.info(f"Created site in PostgreSQL: {site_id}")
+            except Exception as e:
+                logger.error(f"Error saving site to PostgreSQL: {e}", exc_info=True)
                 return False
-            logger.info(f"Created site in InfluxDB: {site_id}")
-        except Exception as e:
-            logger.error(f"Error saving site to InfluxDB: {e}", exc_info=True)
+        elif not self._influx_storage:
+            logger.error("Neither PostgreSQL nor InfluxDB storage configured, cannot create site")
             return False
+
+        # Also save to InfluxDB (secondary storage) for backward compatibility
+        if self._influx_storage:
+            try:
+                if not self._influx_storage.save_site(config):
+                    logger.warning(f"Failed to save site to InfluxDB: {site_id} (non-fatal)")
+                else:
+                    logger.info(f"Synced site to InfluxDB: {site_id}")
+            except Exception as e:
+                logger.warning(f"Error syncing site to InfluxDB: {e} (non-fatal)", exc_info=True)
 
         # Also save to file (backward compatibility, optional)
         if self.site_rules_dir:
@@ -846,13 +895,21 @@ class SiteManager:
             return False
 
         try:
-            # Delete from InfluxDB (primary storage)
+            # Delete from PostgreSQL (primary storage)
+            if self._postgres_storage:
+                try:
+                    if self._postgres_storage.delete_site(site_id):
+                        logger.info(f"Deleted site from PostgreSQL: {site_id}")
+                except Exception as e:
+                    logger.error(f"Error deleting site from PostgreSQL: {e}", exc_info=True)
+            
+            # Also delete from InfluxDB (secondary storage)
             if self._influx_storage:
                 try:
                     if self._influx_storage.delete_site(site_id):
                         logger.info(f"Deleted site from InfluxDB: {site_id}")
                 except Exception as e:
-                    logger.error(f"Error deleting site from InfluxDB: {e}", exc_info=True)
+                    logger.warning(f"Error deleting site from InfluxDB: {e} (non-fatal)", exc_info=True)
 
             # Also delete files (backward compatibility)
             if self.site_rules_dir:
@@ -909,15 +966,25 @@ class SiteManager:
             updated_config = {**existing_config, **site_data}
             updated_config["site_id"] = site_id  # Ensure site_id is preserved
 
-            # Save to InfluxDB (primary storage)
+            # Save to PostgreSQL (primary storage)
+            if self._postgres_storage:
+                try:
+                    if self._postgres_storage.save_site(updated_config):
+                        logger.info(f"Updated site in PostgreSQL: {site_id}")
+                    else:
+                        logger.warning(f"Failed to update site in PostgreSQL: {site_id}")
+                except Exception as e:
+                    logger.error(f"Error updating site in PostgreSQL: {e}", exc_info=True)
+            
+            # Also save to InfluxDB (secondary storage)
             if self._influx_storage:
                 try:
                     if self._influx_storage.save_site(updated_config):
-                        logger.info(f"Updated site in InfluxDB: {site_id}")
+                        logger.info(f"Synced site to InfluxDB: {site_id}")
                     else:
-                        logger.warning(f"Failed to update site in InfluxDB: {site_id}")
+                        logger.warning(f"Failed to sync site to InfluxDB: {site_id} (non-fatal)")
                 except Exception as e:
-                    logger.error(f"Error updating site in InfluxDB: {e}", exc_info=True)
+                    logger.warning(f"Error syncing site to InfluxDB: {e} (non-fatal)", exc_info=True)
 
             # Also update file (backward compatibility)
             if self.site_rules_dir:

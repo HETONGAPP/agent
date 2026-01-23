@@ -59,6 +59,31 @@ class DeviceModel(Base):
     site = relationship("SiteModel", back_populates="devices")
 
 
+class RuleModel(Base):
+    """Rule database model"""
+    __tablename__ = "rules"
+
+    rule_id = Column(String(100), primary_key=True)
+    site_id = Column(String(100), ForeignKey("sites.site_id", ondelete="CASCADE"), nullable=False, primary_key=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    device_types = Column(JSON)  # Array of device types: ["BMS", "PCS"]
+    device_ids = Column(JSON)  # Array of device IDs: ["device_1"], empty array means all devices
+    condition = Column(JSON, nullable=False)  # Condition configuration
+    severity = Column(String(50))  # Warning, Critical, Info
+    priority = Column(Integer, default=0)  # Priority for rule matching
+    actions = Column(JSON)  # Array of actions: ["trigger_llm_diagnostic", "send_email"]
+    rule_metadata = Column("metadata", JSON)  # Use rule_metadata as attribute name, but keep "metadata" as column name
+    enabled = Column(Boolean, default=True)  # Whether rule is enabled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(String(100))
+    updated_by = Column(String(100))
+
+    # Relationship
+    site = relationship("SiteModel")
+
+
 class Database:
     """Database connection and session management"""
 

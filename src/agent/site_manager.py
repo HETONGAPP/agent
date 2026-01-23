@@ -155,8 +155,8 @@ class SiteManager:
     def get_site_rules(self, site_id: str) -> List[Dict[str, Any]]:
         """
         Get site-specific rules
-        Priority: Database (container) > File > Cache
-        Global rules are loaded from file, site rules are loaded from database first, then file as fallback
+        Priority: PostgreSQL (primary) > InfluxDB (container) > File > Cache
+        Global rules are loaded from file, site rules are loaded from PostgreSQL first, then InfluxDB, then file as fallback
 
         Args:
             site_id: Site ID
@@ -168,7 +168,19 @@ class SiteManager:
         if site_id in self._site_rules_cache:
             return self._site_rules_cache[site_id].copy()
 
-        # Try to get from container (database) first
+        # Try to get from PostgreSQL first (primary storage)
+        if self._postgres_storage:
+            try:
+                rules = self._postgres_storage.get_rules_by_site(site_id, enabled_only=False)
+                if rules:
+                    # Cache the result
+                    self._site_rules_cache[site_id] = rules
+                    logger.debug(f"Loaded {len(rules)} rules from PostgreSQL for site {site_id}")
+                    return rules.copy()
+            except Exception as e:
+                logger.warning(f"Failed to load rules from PostgreSQL for site {site_id}: {e}, trying InfluxDB")
+
+        # Try to get from InfluxDB container (secondary storage)
         if self._container_manager:
             try:
                 container = self._container_manager.get_container(site_id, auto_create=False)
@@ -177,12 +189,19 @@ class SiteManager:
                     if rules:
                         # Cache the result
                         self._site_rules_cache[site_id] = rules
-                        logger.debug(f"Loaded {len(rules)} rules from database for site {site_id}")
+                        # Sync to PostgreSQL if available
+                        if self._postgres_storage:
+                            try:
+                                for rule in rules:
+                                    self._postgres_storage.save_rule(site_id, rule)
+                            except Exception as e:
+                                logger.warning(f"Failed to sync rules to PostgreSQL: {e}")
+                        logger.debug(f"Loaded {len(rules)} rules from InfluxDB for site {site_id}")
                         return rules.copy()
                     else:
-                        logger.debug(f"No rules found in database for site {site_id}, falling back to file")
+                        logger.debug(f"No rules found in InfluxDB for site {site_id}, falling back to file")
             except Exception as e:
-                logger.warning(f"Failed to load rules from database for site {site_id}: {e}, falling back to file")
+                logger.warning(f"Failed to load rules from InfluxDB for site {site_id}: {e}, falling back to file")
 
         # Fallback to file if database has no rules
         if not self.site_rules_dir:
@@ -299,7 +318,7 @@ class SiteManager:
     def update_site_rule(self, site_id: str, rule_id: str, rule: Dict[str, Any]) -> bool:
         """
         Update an existing rule in a site
-        Updates rule in InfluxDB container (primary) and optionally in files (backward compatibility)
+        Updates rule in PostgreSQL (primary), InfluxDB container (secondary), and optionally in files (backward compatibility)
 
         Args:
             site_id: Site ID
@@ -328,24 +347,32 @@ class SiteManager:
                 rule["metadata"]["alarm_type"] = alarm_type
                 logger.debug(f"Auto-generated alarm_type '{alarm_type}' from rule name '{rule_name}'")
 
-            # Try to update in container (database) first - primary storage
+            # Try to update in PostgreSQL first (primary storage)
             rule_found = False
+            if self._postgres_storage:
+                try:
+                    existing_rule = self._postgres_storage.get_rule(site_id, rule_id)
+                    if existing_rule:
+                        # Rule exists, update it
+                        if self._postgres_storage.save_rule(site_id, rule):
+                            rule_found = True
+                            logger.debug(f"Updated rule {rule_id} in PostgreSQL for site {site_id}")
+                        else:
+                            logger.warning(f"Failed to update rule {rule_id} in PostgreSQL for site {site_id}")
+                    else:
+                        logger.debug(f"Rule {rule_id} not found in PostgreSQL for site {site_id}, checking InfluxDB")
+                except Exception as e:
+                    logger.warning(f"Failed to update rule in PostgreSQL for site {site_id}: {e}")
+
+            # Also update in InfluxDB container (secondary storage)
             if self._container_manager:
                 try:
                     container = self._container_manager.get_container(site_id, auto_create=True)
                     if container:
-                        # Check if rule exists
-                        existing_rules = container.query_rules(rule_id=rule_id)
-                        if existing_rules:
-                            # Rule exists, update it
-                            container.write_rule(rule, flush=True)
-                            rule_found = True
-                            logger.debug(f"Updated rule {rule_id} in container for site {site_id}")
-                        else:
-                            # Rule not found in container, check if it exists in files
-                            logger.debug(f"Rule {rule_id} not found in container for site {site_id}, checking files")
+                        container.write_rule(rule, flush=True)
+                        logger.debug(f"Updated rule {rule_id} in InfluxDB container for site {site_id}")
                 except Exception as e:
-                    logger.warning(f"Failed to update rule in container for site {site_id}: {e}")
+                    logger.warning(f"Failed to update rule in InfluxDB container for site {site_id}: {e}")
 
             # Also check/update in file if site_rules_dir is configured (backward compatibility)
             # This handles cases where rule exists in file but not in container yet
@@ -435,7 +462,8 @@ class SiteManager:
 
     def delete_site_rule(self, site_id: str, rule_id: str) -> bool:
         """
-        Delete a rule from a site's rules file
+        Delete a rule from a site
+        Deletes from PostgreSQL (primary), InfluxDB container (secondary), and optionally from files (backward compatibility)
 
         Args:
             site_id: Site ID
@@ -444,37 +472,58 @@ class SiteManager:
         Returns:
             True if rule was deleted successfully, False otherwise
         """
-        if not self.site_rules_dir:
-            logger.error("Site rules directory not configured")
-            return False
-
         if not self.site_exists(site_id):
             logger.warning(f"Site {site_id} does not exist")
             return False
 
         try:
-            # Load existing rules
-            rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
-            if not rules_file.exists():
-                logger.warning(f"Rules file not found for site {site_id}")
-                return False
+            deleted = False
 
-            with open(rules_file, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-                existing_rules = config.get("rules", [])
+            # Delete from PostgreSQL (primary storage)
+            if self._postgres_storage:
+                try:
+                    if self._postgres_storage.delete_rule(site_id, rule_id):
+                        deleted = True
+                        logger.debug(f"Deleted rule {rule_id} from PostgreSQL for site {site_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete rule from PostgreSQL for site {site_id}: {e}")
 
-            # Find and remove the rule
-            original_count = len(existing_rules)
-            existing_rules = [r for r in existing_rules if r.get("id") != rule_id]
+            # Also delete from InfluxDB container (secondary storage)
+            if self._container_manager:
+                try:
+                    container = self._container_manager.get_container(site_id, auto_create=False)
+                    if container:
+                        container.delete_rule(rule_id)
+                        logger.debug(f"Deleted rule {rule_id} from InfluxDB container for site {site_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete rule from InfluxDB container for site {site_id}: {e}")
 
-            if len(existing_rules) == original_count:
+            # Also delete from file if site_rules_dir is configured (backward compatibility)
+            if self.site_rules_dir:
+                rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+                if rules_file.exists():
+                    try:
+                        with open(rules_file, "r", encoding="utf-8") as f:
+                            config = yaml.safe_load(f) or {}
+                            existing_rules = config.get("rules", [])
+
+                        # Find and remove the rule
+                        original_count = len(existing_rules)
+                        existing_rules = [r for r in existing_rules if r.get("id") != rule_id]
+
+                        if len(existing_rules) < original_count:
+                            # Save to file
+                            config = {"rules": existing_rules}
+                            with open(rules_file, "w", encoding="utf-8") as f:
+                                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                            logger.debug(f"Deleted rule {rule_id} from file for site {site_id}")
+                            deleted = True
+                    except Exception as e:
+                        logger.warning(f"Failed to delete rule from file for site {site_id}: {e}")
+
+            if not deleted:
                 logger.warning(f"Rule with ID {rule_id} not found for site {site_id}")
                 return False
-
-            # Save to file
-            config = {"rules": existing_rules}
-            with open(rules_file, "w", encoding="utf-8") as f:
-                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
             # Also delete from container (database) - dual write
             if self._container_manager:

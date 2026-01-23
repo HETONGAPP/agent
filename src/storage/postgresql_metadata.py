@@ -22,9 +22,10 @@ class PostgreSQLMetadataStorage:
             database: Database instance from core.database
         """
         self.database = database
-        from ..core.database import SiteModel, DeviceModel
+        from ..core.database import SiteModel, DeviceModel, RuleModel
         self.SiteModel = SiteModel
         self.DeviceModel = DeviceModel
+        self.RuleModel = RuleModel
 
     @contextmanager
     def _get_session(self):
@@ -359,4 +360,238 @@ class PostgreSQLMetadataStorage:
         except Exception as e:
             logger.error(f"Failed to delete device from PostgreSQL: {e}", exc_info=True)
             return False
+
+    def save_rule(self, site_id: str, rule_data: Dict[str, Any]) -> bool:
+        """
+        Save rule to PostgreSQL
+
+        Args:
+            site_id: Site ID
+            rule_data: Rule configuration dictionary
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            rule_id = rule_data.get("id") or rule_data.get("rule_id")
+            if not rule_id:
+                logger.error("rule_id is required")
+                return False
+
+            with self._get_session() as session:
+                # Check if rule exists
+                rule = session.query(self.RuleModel).filter_by(
+                    rule_id=rule_id,
+                    site_id=site_id
+                ).first()
+                
+                if rule:
+                    # Update existing rule
+                    rule.name = rule_data.get("name", rule.name)
+                    rule.description = rule_data.get("description", rule.description)
+                    rule.device_types = rule_data.get("device_types", rule.device_types or [])
+                    rule.device_ids = rule_data.get("device_ids", rule.device_ids or [])
+                    rule.condition = rule_data.get("condition", rule.condition)
+                    rule.severity = rule_data.get("severity", rule.severity)
+                    rule.priority = rule_data.get("priority", rule.priority or 0)
+                    rule.actions = rule_data.get("actions", rule.actions or [])
+                    rule.rule_metadata = rule_data.get("metadata", rule.rule_metadata or {})
+                    rule.enabled = rule_data.get("enabled", rule.enabled if rule.enabled is not None else True)
+                    rule.updated_at = datetime.utcnow()
+                    logger.debug(f"Updated rule {rule_id} for site {site_id} in PostgreSQL")
+                else:
+                    # Create new rule
+                    rule = self.RuleModel(
+                        rule_id=rule_id,
+                        site_id=site_id,
+                        name=rule_data.get("name", ""),
+                        description=rule_data.get("description"),
+                        device_types=rule_data.get("device_types", []),
+                        device_ids=rule_data.get("device_ids", []),
+                        condition=rule_data.get("condition", {}),
+                        severity=rule_data.get("severity"),
+                        priority=rule_data.get("priority", 0),
+                        actions=rule_data.get("actions", []),
+                        rule_metadata=rule_data.get("metadata", {}),
+                        enabled=rule_data.get("enabled", True),
+                    )
+                    session.add(rule)
+                    logger.debug(f"Created rule {rule_id} for site {site_id} in PostgreSQL")
+
+            logger.info(f"Saved rule {rule_id} for site {site_id} to PostgreSQL")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save rule to PostgreSQL: {e}", exc_info=True)
+            return False
+
+    def get_rule(self, site_id: str, rule_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get rule from PostgreSQL
+
+        Args:
+            site_id: Site ID
+            rule_id: Rule ID
+
+        Returns:
+            Rule data dictionary or None if not found
+        """
+        try:
+            with self._get_session() as session:
+                rule = session.query(self.RuleModel).filter_by(
+                    rule_id=rule_id,
+                    site_id=site_id
+                ).first()
+                
+                if not rule:
+                    return None
+
+                return {
+                    "id": rule.rule_id,
+                    "rule_id": rule.rule_id,
+                    "site_id": rule.site_id,
+                    "name": rule.name,
+                    "description": rule.description,
+                    "device_types": rule.device_types or [],
+                    "device_ids": rule.device_ids or [],
+                    "condition": rule.condition or {},
+                    "severity": rule.severity,
+                    "priority": rule.priority or 0,
+                    "actions": rule.actions or [],
+                    "metadata": rule.rule_metadata or {},
+                    "enabled": rule.enabled if rule.enabled is not None else True,
+                    "created_at": rule.created_at.isoformat() if rule.created_at else None,
+                    "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+                    "created_by": rule.created_by,
+                    "updated_by": rule.updated_by,
+                }
+        except Exception as e:
+            logger.error(f"Failed to get rule from PostgreSQL: {e}", exc_info=True)
+            return None
+
+    def get_rules_by_site(self, site_id: str, enabled_only: bool = False) -> List[Dict[str, Any]]:
+        """
+        Get all rules for a site from PostgreSQL
+
+        Args:
+            site_id: Site ID
+            enabled_only: If True, only return enabled rules
+
+        Returns:
+            List of rule data dictionaries
+        """
+        try:
+            with self._get_session() as session:
+                query = session.query(self.RuleModel).filter_by(site_id=site_id)
+                if enabled_only:
+                    query = query.filter_by(enabled=True)
+                rules = query.order_by(self.RuleModel.priority.desc()).all()
+                
+                return [
+                    {
+                        "id": rule.rule_id,
+                        "rule_id": rule.rule_id,
+                        "site_id": rule.site_id,
+                        "name": rule.name,
+                        "description": rule.description,
+                        "device_types": rule.device_types or [],
+                        "device_ids": rule.device_ids or [],
+                        "condition": rule.condition or {},
+                        "severity": rule.severity,
+                        "priority": rule.priority or 0,
+                        "actions": rule.actions or [],
+                        "metadata": rule.metadata or {},
+                        "enabled": rule.enabled if rule.enabled is not None else True,
+                        "created_at": rule.created_at.isoformat() if rule.created_at else None,
+                        "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+                        "created_by": rule.created_by,
+                        "updated_by": rule.updated_by,
+                    }
+                    for rule in rules
+                ]
+        except Exception as e:
+            logger.error(f"Failed to get rules for site {site_id} from PostgreSQL: {e}", exc_info=True)
+            return []
+
+    def delete_rule(self, site_id: str, rule_id: str) -> bool:
+        """
+        Delete rule from PostgreSQL
+
+        Args:
+            site_id: Site ID
+            rule_id: Rule ID
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self._get_session() as session:
+                rule = session.query(self.RuleModel).filter_by(
+                    rule_id=rule_id,
+                    site_id=site_id
+                ).first()
+                
+                if not rule:
+                    logger.warning(f"Rule {rule_id} not found for site {site_id} in PostgreSQL")
+                    return False
+
+                session.delete(rule)
+                logger.info(f"Deleted rule {rule_id} for site {site_id} from PostgreSQL")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete rule from PostgreSQL: {e}", exc_info=True)
+            return False
+
+    def get_rules_by_device_type(self, site_id: str, device_type: str, enabled_only: bool = True) -> List[Dict[str, Any]]:
+        """
+        Get rules for a specific device type from PostgreSQL
+
+        Args:
+            site_id: Site ID
+            device_type: Device type (e.g., "BMS", "PCS")
+            enabled_only: If True, only return enabled rules
+
+        Returns:
+            List of rule data dictionaries
+        """
+        try:
+            with self._get_session() as session:
+                from sqlalchemy import func
+                # Query rules where device_types JSON array contains the device_type
+                query = session.query(self.RuleModel).filter_by(site_id=site_id)
+                if enabled_only:
+                    query = query.filter_by(enabled=True)
+                
+                # Get all rules for the site
+                rules = query.all()
+                
+                # Filter in Python (PostgreSQL JSONB contains is complex, so filter in Python)
+                result = []
+                for rule in rules:
+                    device_types = rule.device_types or []
+                    # Check if device_type is in the array, or if it's an EMS rule (matches all)
+                    if device_type in device_types or "EMS" in device_types:
+                        result.append({
+                            "id": rule.rule_id,
+                            "rule_id": rule.rule_id,
+                            "site_id": rule.site_id,
+                            "name": rule.name,
+                            "description": rule.description,
+                            "device_types": device_types,
+                            "device_ids": rule.device_ids or [],
+                            "condition": rule.condition or {},
+                            "severity": rule.severity,
+                            "priority": rule.priority or 0,
+                            "actions": rule.actions or [],
+                            "metadata": rule.metadata or {},
+                            "enabled": rule.enabled if rule.enabled is not None else True,
+                            "created_at": rule.created_at.isoformat() if rule.created_at else None,
+                            "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+                        })
+                
+                # Sort by priority
+                result.sort(key=lambda x: x.get("priority", 0), reverse=True)
+                return result
+        except Exception as e:
+            logger.error(f"Failed to get rules by device type from PostgreSQL: {e}", exc_info=True)
+            return []
 

@@ -529,6 +529,12 @@ class InfluxDBMetadataStorage:
 
             # Write to InfluxDB - use site-specific bucket if available
             bucket_name = self._get_bucket_for_device(device_data)
+            
+            # Ensure bucket exists before writing
+            if not self._ensure_bucket_exists(bucket_name):
+                logger.error(f"Failed to create bucket {bucket_name} for device {device_id}")
+                return False
+            
             try:
                 self.influx_client.write_api.write(
                     bucket=bucket_name,
@@ -536,13 +542,8 @@ class InfluxDBMetadataStorage:
                     record=point
                 )
             except Exception as write_error:
-                # If bucket doesn't exist, try default bucket as fallback
-                logger.warning(f"Failed to write to bucket {bucket_name}, trying default: {write_error}")
-                self.influx_client.write_api.write(
-                    bucket=self.influx_client.bucket,
-                    org=self.influx_client.org,
-                    record=point
-                )
+                logger.error(f"Failed to write to bucket {bucket_name}: {write_error}")
+                return False
 
             logger.debug(f"Saved device metadata to InfluxDB: {device_id}")
             return True

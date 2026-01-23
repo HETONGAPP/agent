@@ -1040,6 +1040,11 @@ class InfluxDBClient:
             if metric:
                 query += f' |> filter(fn: (r) => r["metric"] == "{metric}")'
             
+            # Filter to only numeric fields before aggregation
+            # mean() only works on numeric values, not strings
+            # Check if _value exists and is numeric (float or int)
+            query += ' |> filter(fn: (r) => exists r["_value"] and (type(v: r["_value"]) == "float" or type(v: r["_value"]) == "int"))'
+            
             # Group by device_id and metric to aggregate separately
             group_columns = []
             if device_ids and len(device_ids) > 1:
@@ -1049,10 +1054,6 @@ class InfluxDBClient:
             if group_columns:
                 columns_str = ', '.join([f'"{col}"' for col in group_columns])
                 query += f' |> group(columns: [{columns_str}])'
-            
-            # Filter to only numeric fields before aggregation
-            # mean() only works on numeric values, not strings
-            query += ' |> filter(fn: (r) => exists r["_value"] and type(v: r["_value"]) == "float" or type(v: r["_value"]) == "int")'
             
             # Aggregate by time window (only on numeric _value field)
             query += f' |> aggregateWindow(every: {interval}, fn: mean, createEmpty: false)'

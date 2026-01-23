@@ -64,6 +64,76 @@ class InfluxDBMetadataStorage:
         
         # Fallback to default bucket
         return self.influx_client.bucket
+    
+    def _ensure_bucket_exists(self, bucket_name: str) -> bool:
+        """
+        Ensure bucket exists, create if it doesn't
+        
+        Args:
+            bucket_name: Bucket name to check/create
+            
+        Returns:
+            True if bucket exists or was created successfully, False otherwise
+        """
+        try:
+            buckets_api = self.influx_client.client.buckets_api()
+            
+            # Check if bucket exists
+            try:
+                buckets = buckets_api.find_buckets()
+                if hasattr(buckets, 'buckets'):
+                    bucket_list = buckets.buckets
+                elif isinstance(buckets, list):
+                    bucket_list = buckets
+                else:
+                    bucket_list = list(buckets) if buckets else []
+                
+                bucket_exists = any(b.name == bucket_name for b in bucket_list)
+            except Exception:
+                bucket_exists = False
+            
+            if bucket_exists:
+                return True
+            
+            # Create bucket if it doesn't exist
+            # Get org ID from org name
+            orgs_api = self.influx_client.client.organizations_api()
+            orgs = orgs_api.find_organizations()
+            org_id = None
+            if hasattr(orgs, 'orgs'):
+                org_list = orgs.orgs
+            elif isinstance(orgs, list):
+                org_list = orgs
+            else:
+                org_list = list(orgs) if orgs else []
+            
+            for org in org_list:
+                if org.name == self.influx_client.org:
+                    org_id = org.id
+                    break
+            
+            if not org_id:
+                # Fallback: try to create with org name
+                org_id = self.influx_client.org
+            
+            # Create bucket with default retention policy (30 days)
+            from influxdb_client.domain.bucket import Bucket
+            from influxdb_client.domain.bucket_retention_rules import BucketRetentionRules
+            
+            # 30 days retention
+            retention_seconds = 30 * 24 * 60 * 60
+            retention_rules = BucketRetentionRules(type="expire", every_seconds=retention_seconds)
+            bucket = Bucket(
+                name=bucket_name,
+                org_id=org_id,
+                retention_rules=[retention_rules],
+            )
+            buckets_api.create_bucket(bucket=bucket)
+            logger.info(f"✓ Created bucket: {bucket_name} (retention: 30 days)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to ensure bucket {bucket_name} exists: {e}", exc_info=True)
+            return False
 
     def save_site(self, site_data: Dict[str, Any]) -> bool:
         """
@@ -121,6 +191,12 @@ class InfluxDBMetadataStorage:
 
             # Write to InfluxDB - use site-specific bucket
             bucket_name = self._get_bucket_for_site(site_id)
+            
+            # Ensure bucket exists before writing
+            if not self._ensure_bucket_exists(bucket_name):
+                logger.error(f"Failed to create bucket {bucket_name} for site {site_id}")
+                return False
+            
             try:
                 self.influx_client.write_api.write(
                     bucket=bucket_name,
@@ -128,13 +204,8 @@ class InfluxDBMetadataStorage:
                     record=point
                 )
             except Exception as write_error:
-                # If bucket doesn't exist, try default bucket as fallback
-                logger.warning(f"Failed to write to bucket {bucket_name}, trying default: {write_error}")
-                self.influx_client.write_api.write(
-                    bucket=self.influx_client.bucket,
-                    org=self.influx_client.org,
-                    record=point
-                )
+                logger.error(f"Failed to write to bucket {bucket_name}: {write_error}")
+                return False
 
             logger.debug(f"Saved site metadata to InfluxDB: {site_id}")
             return True

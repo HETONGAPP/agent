@@ -70,5 +70,8 @@ docker-compose.override.yml
 # 配置文件（包含敏感信息）
 config/local.yaml
 config/production.yaml
+# 站点配置文件（运行时生成，可能包含敏感信息）
+config/sites/*.yaml
+config/sites/*.yml
 
 .agent_cli_history

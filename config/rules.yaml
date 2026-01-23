@@ -1,0 +1,549 @@
+# BESS alarm rules configuration
+# Rule engine uses this file for alarm pattern matching
+# Supports all energy storage system components: BMS, PCS, UPS, TMS, EMS, etc.
+
+rules:
+  # ============================================
+  # BMS (Battery Management System) Rules
+  # ============================================
+  
+  # Rule 001: Cell voltage deviation (BMS) - Optimized threshold
+  - id: RULE_001
+    name: Cell Voltage Deviation
+    description: Detect cell voltage deviation, trigger when maximum voltage difference exceeds threshold
+    device_types: [BMS]  # Only applies to BMS devices
+    condition:
+      type: threshold
+      field: max_delta_v
+      operator: ">="
+      value: 0.08  # Optimized: reduced from 0.1V for earlier detection
+      unit: "V"
+    severity: Warning
+    priority: 5
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 3.2.1"
+      standard: "UL 9540A"
+      alarm_type: cell_voltage_deviation
+
+  # Rule 002: Over temperature alarm (BMS) - Optimized threshold
+  - id: RULE_002
+    name: Over Temperature
+    description: Detect over temperature alarm, trigger when maximum temperature exceeds threshold
+    device_types: [BMS]  # Only applies to BMS devices
+    condition:
+      type: threshold
+      field: max_temperature
+      operator: ">"
+      value: 43  # Optimized: reduced from 45°C for earlier warning
+      unit: "°C"
+    severity: Critical
+    priority: 10
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 4.1.2"
+      standard: "IEC 62619"
+      alarm_type: over_temperature
+
+  # Rule 003: Under temperature alarm
+  - id: RULE_003
+    name: Under Temperature
+    description: Detect under temperature alarm, trigger when minimum temperature is below threshold
+    condition:
+      type: threshold
+      field: min_temperature
+      operator: "<"
+      value: 0
+      unit: "°C"
+    severity: Warning
+    priority: 6
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 4.1.3"
+      alarm_type: under_temperature
+
+  # Rule 004: SOC anomaly
+  - id: RULE_004
+    name: SOC Anomaly
+    description: Detect SOC rate of change anomaly
+    condition:
+      type: rate_of_change
+      field: soc
+      operator: ">"
+      value: 10
+      unit: "%/min"
+      time_window: 60
+      unit_time: "seconds"
+    severity: Warning
+    priority: 4
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 2.3.1"
+      alarm_type: soc_anomaly
+
+  # Rule 005: SOH degradation
+  - id: RULE_005
+    name: SOH Degradation
+    description: Detect battery health state degradation
+    condition:
+      type: threshold
+      field: soh
+      operator: "<"
+      value: 80
+      unit: "%"
+    severity: Warning
+    priority: 7
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 5.1.1"
+      alarm_type: soh_degradation
+
+  # Rule 006: Power limit exceeded
+  - id: RULE_006
+    name: Power Limit Exceeded
+    description: Detect power limit exceeded alarm
+    condition:
+      type: threshold
+      field: power
+      operator: ">"
+      value: 1000
+      unit: "kW"
+    severity: Critical
+    priority: 9
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 6.2.1"
+      alarm_type: power_limit_exceeded
+
+  # Rule 007: Communication failure
+  - id: RULE_007
+    name: Communication Failure
+    description: Detect communication failure
+    condition:
+      type: status
+      field: communication_status
+      operator: "=="
+      value: "failed"
+    severity: Critical
+    priority: 8
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 7.1.1"
+      alarm_type: communication_failure
+
+  # Rule 008: Module imbalance
+  - id: RULE_008
+    name: Module Imbalance
+    description: Detect module imbalance
+    condition:
+      type: threshold
+      field: module_voltage_diff
+      operator: ">="
+      value: 5
+      unit: "V"
+    severity: Warning
+    priority: 5
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 3.3.1"
+      alarm_type: module_imbalance
+
+  # Rule 009: Cooling system failure
+  - id: RULE_009
+    name: Cooling System Failure
+    description: Detect cooling system failure
+    condition:
+      type: status
+      field: cooling_system_status
+      operator: "=="
+      value: "failed"
+    severity: Critical
+    priority: 10
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 4.2.1"
+      alarm_type: cooling_system_failure
+
+  # Rule 010: Grid connection issue (PCS)
+  - id: RULE_010
+    name: Grid Connection Issue
+    description: Detect grid connection issue
+    device_types: [PCS, EMS]  # Applies to PCS and EMS devices
+    condition:
+      type: status
+      field: grid_connection_status
+      operator: "=="
+      value: "disconnected"
+    severity: Critical
+    priority: 9
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 8.1.1"
+      alarm_type: grid_connection_issue
+
+  # ============================================
+  # PCS (Power Conversion System) Rules
+  # ============================================
+  
+  # Rule 011: PCS power limit exceeded
+  - id: RULE_011
+    name: PCS Power Limit Exceeded
+    description: Detect PCS power limit exceeded
+    device_types: [PCS]
+    condition:
+      type: threshold
+      field: active_power
+      operator: ">"
+      value: 1000
+      unit: "kW"
+    severity: Critical
+    priority: 9
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 6.2.1"
+      alarm_type: pcs_power_limit_exceeded
+
+  # Rule 012: PCS efficiency low
+  - id: RULE_012
+    name: PCS Efficiency Low
+    description: Detect PCS efficiency below threshold
+    device_types: [PCS]
+    condition:
+      type: threshold
+      field: efficiency
+      operator: "<"
+      value: 85
+      unit: "%"
+    severity: Warning
+    priority: 6
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 6.3.1"
+      alarm_type: pcs_efficiency_low
+
+  # Rule 013: PCS fault status
+  - id: RULE_013
+    name: PCS Fault Status
+    description: Detect PCS fault status
+    device_types: [PCS]
+    condition:
+      type: status
+      field: status
+      operator: "=="
+      value: "fault"
+    severity: Critical
+    priority: 10
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 6.4.1"
+      alarm_type: pcs_fault
+
+  # ============================================
+  # UPS (Uninterruptible Power Supply) Rules
+  # ============================================
+  
+  # Rule 014: UPS battery capacity low
+  - id: RULE_014
+    name: UPS Battery Capacity Low
+    description: Detect UPS battery capacity below threshold
+    device_types: [UPS]
+    condition:
+      type: threshold
+      field: battery_capacity
+      operator: "<"
+      value: 20
+      unit: "%"
+    severity: Warning
+    priority: 7
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 9.1.1"
+      alarm_type: ups_battery_capacity_low
+
+  # Rule 015: UPS fault status
+  - id: RULE_015
+    name: UPS Fault Status
+    description: Detect UPS fault status
+    device_types: [UPS]
+    condition:
+      type: status
+      field: status
+      operator: "=="
+      value: "fault"
+    severity: Critical
+    priority: 10
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 9.2.1"
+      alarm_type: ups_fault
+
+  # ============================================
+  # TMS (Thermal Management System) Rules
+  # ============================================
+  
+  # Rule 016: TMS cooling system failure
+  - id: RULE_016
+    name: TMS Cooling System Failure
+    description: Detect TMS cooling system failure
+    device_types: [TMS]
+    condition:
+      type: status
+      field: cooling_system_status
+      operator: "=="
+      value: "fault"
+    severity: Critical
+    priority: 10
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 4.2.1"
+      alarm_type: tms_cooling_system_failure
+
+  # Rule 017: TMS coolant temperature high
+  - id: RULE_017
+    name: TMS Coolant Temperature High
+    description: Detect TMS coolant temperature above threshold
+    device_types: [TMS]
+    condition:
+      type: threshold
+      field: coolant_temperature
+      operator: ">"
+      value: 50
+      unit: "°C"
+    severity: Warning
+    priority: 7
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 4.3.1"
+      alarm_type: tms_coolant_temperature_high
+
+  # Rule 018: TMS coolant flow rate low
+  - id: RULE_018
+    name: TMS Coolant Flow Rate Low
+    description: Detect TMS coolant flow rate below threshold
+    device_types: [TMS]
+    condition:
+      type: threshold
+      field: coolant_flow_rate
+      operator: "<"
+      value: 5
+      unit: "L/min"
+    severity: Warning
+    priority: 6
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 4.4.1"
+      alarm_type: tms_coolant_flow_rate_low
+
+  # ============================================
+  # Multi-Component Rules (applies to multiple device types)
+  # ============================================
+  
+  # Rule 019: High temperature (applies to all components with temperature)
+  - id: RULE_019
+    name: High Temperature (Multi-Component)
+    description: Detect high temperature across all components
+    device_types: [BMS, PCS, UPS, TMS]  # Applies to multiple device types
+    condition:
+      type: threshold
+      field: temperature
+      operator: ">"
+      value: 60
+      unit: "°C"
+    severity: Critical
+    priority: 9
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 4.1.4"
+      alarm_type: high_temperature_multi_component
+
+  # Rule 020: Rapid SOH degradation
+  - id: RULE_020
+    name: Rapid SOH Degradation
+    description: Detect rapid battery health degradation (rate of change)
+    device_types: [BMS]
+    condition:
+      type: rate_of_change
+      field: soh
+      operator: "<"
+      value: -2
+      unit: "%/month"
+      time_window: 2592000
+      unit_time: "seconds"
+    severity: Warning
+    priority: 8
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 5.2.1"
+      standard: "IEC 62619"
+      alarm_type: rapid_soh_degradation
+
+  # Rule 021: Charge/discharge efficiency anomaly
+  - id: RULE_021
+    name: Charge/Discharge Efficiency Anomaly
+    description: Detect abnormal charge/discharge efficiency
+    device_types: [BMS, PCS]
+    condition:
+      type: threshold
+      field: charge_discharge_efficiency
+      operator: "<"
+      value: 85
+      unit: "%"
+    severity: Warning
+    priority: 6
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 2.4.1"
+      alarm_type: efficiency_anomaly
+
+  # Rule 022: Ambient temperature extreme
+  - id: RULE_022
+    name: Ambient Temperature Extreme
+    description: Detect extreme ambient temperature affecting system
+    device_types: [BMS, PCS, UPS, TMS]
+    condition:
+      type: range
+      field: ambient_temperature
+      operator: "outside"
+      min_value: -10
+      max_value: 45
+      unit: "°C"
+    severity: Warning
+    priority: 7
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 4.5.1"
+      alarm_type: ambient_temperature_extreme
+
+  # Rule 023: Data collection failure
+  - id: RULE_023
+    name: Data Collection Failure
+    description: Detect data collection failure or stale data
+    device_types: [BMS, PCS, UPS, TMS, EMS]
+    condition:
+      type: status
+      field: data_collection_status
+      operator: "=="
+      value: "failed"
+    severity: Warning
+    priority: 5
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 10.1.1"
+      alarm_type: data_collection_failure
+
+  # Rule 024: Battery pack imbalance (advanced)
+  - id: RULE_024
+    name: Battery Pack Imbalance
+    description: Detect significant imbalance between battery packs
+    device_types: [BMS]
+    condition:
+      type: threshold
+      field: pack_voltage_diff
+      operator: ">="
+      value: 10
+      unit: "V"
+    severity: Warning
+    priority: 6
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 3.4.1"
+      alarm_type: pack_imbalance
+
+  # Rule 025: PCS DC overvoltage
+  - id: RULE_025
+    name: PCS DC Overvoltage
+    description: Detect PCS DC link overvoltage
+    device_types: [PCS]
+    condition:
+      type: threshold
+      field: dc_voltage
+      operator: ">"
+      value: 800
+      unit: "V"
+    severity: Critical
+    priority: 9
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+      - notify_engineer
+    metadata:
+      sop_reference: "SOP 6.5.1"
+      alarm_type: pcs_dc_overvoltage
+
+  # Rule 026: PCS DC undervoltage
+  - id: RULE_026
+    name: PCS DC Undervoltage
+    description: Detect PCS DC link undervoltage
+    device_types: [PCS]
+    condition:
+      type: threshold
+      field: dc_voltage
+      operator: "<"
+      value: 400
+      unit: "V"
+    severity: Warning
+    priority: 7
+    actions:
+      - trigger_llm_diagnostic
+      - send_email
+    metadata:
+      sop_reference: "SOP 6.6.1"
+      alarm_type: pcs_dc_undervoltage

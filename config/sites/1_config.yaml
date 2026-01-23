@@ -1,0 +1,26 @@
+site_id: '1'
+site_name: ottawa1
+location: ottawa
+timezone: America/New_York
+climate: Continental
+latitude: 46.059564540429285
+longitude: -75.00192556699264
+country: Canada
+state: 'on'
+settings:
+  data_collection_interval: 30
+  alarm_cooldown_period: 300
+  max_alarm_rate: 10
+  enable_cross_site_analysis: true
+devices:
+  BMS:
+    enabled: true
+    collection_interval: 30
+  PCS:
+    enabled: true
+    collection_interval: 30
+  UPS:
+    enabled: false
+  TMS:
+    enabled: true
+    collection_interval: 60

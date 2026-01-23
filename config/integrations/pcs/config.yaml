@@ -1,0 +1,27 @@
+# PCS Integration Configuration
+# All PCS-related configurations are here
+
+enabled: true
+device_type: PCS
+api_url: ${PCS_API_URL}
+api_key: ${PCS_API_KEY}
+interval: 30 # Data collection interval (seconds)
+timeout: 10 # API request timeout (seconds)
+
+# PCS-specific configuration
+metadata:
+  power_unit: "kW"
+  voltage_unit: "V"
+  current_unit: "A"
+
+# Data field mapping (if needed)
+field_mapping:
+  active_power: "active_power"
+  reactive_power: "reactive_power"
+  voltage: "voltage"
+  current: "current"
+  frequency: "frequency"
+  efficiency: "efficiency"
+  status: "status"
+  temperature: "temperature"
+  grid_connection_status: "grid_connection_status"

@@ -1,0 +1,24 @@
+# BMS Integration Configuration
+# All BMS-related configurations are here
+
+enabled: true
+device_type: BMS
+api_url: ${BMS_API_URL}
+api_key: ${BMS_API_KEY}
+interval: 30 # Data collection interval (seconds)
+timeout: 10 # API request timeout (seconds)
+
+# BMS-specific configuration
+metadata:
+  pack_id_format: "PACK_{device_id}"
+  cell_count: 4
+  temperature_sensor_count: 4
+
+# Data field mapping (if needed)
+field_mapping:
+  cell_voltages: "cell_voltages"
+  temperatures: "temperatures"
+  soc: "soc"
+  soh: "soh"
+  max_delta_v: "max_delta_v"
+  pack_id: "pack_id"

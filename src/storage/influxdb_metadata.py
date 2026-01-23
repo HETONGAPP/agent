@@ -24,6 +24,46 @@ class InfluxDBMetadataStorage:
         self.influx_client = influx_client
         self.sites_measurement = "sites_metadata"
         self.devices_measurement = "devices_metadata"
+    
+    def _get_bucket_for_site(self, site_id: str) -> str:
+        """
+        Get bucket name for a site
+        Uses site-specific bucket if site containers are enabled, otherwise uses default bucket
+        
+        Args:
+            site_id: Site ID
+            
+        Returns:
+            Bucket name
+        """
+        # Check if site containers are enabled by checking if bucket name pattern matches
+        # If default bucket is "alarms" and it doesn't exist, use site bucket
+        default_bucket = self.influx_client.bucket
+        if default_bucket == "alarms":
+            # Site container mode: use site-specific bucket
+            return f"site_{site_id}"
+        # Legacy mode: use default bucket
+        return default_bucket
+    
+    def _get_bucket_for_device(self, device_data: Dict[str, Any]) -> str:
+        """
+        Get bucket name for a device based on its site_id
+        
+        Args:
+            device_data: Device data dictionary
+            
+        Returns:
+            Bucket name
+        """
+        site_id = device_data.get("site_id")
+        if not site_id and "metadata" in device_data:
+            site_id = device_data.get("metadata", {}).get("site_id")
+        
+        if site_id:
+            return self._get_bucket_for_site(site_id)
+        
+        # Fallback to default bucket
+        return self.influx_client.bucket
 
     def save_site(self, site_data: Dict[str, Any]) -> bool:
         """
@@ -79,12 +119,22 @@ class InfluxDBMetadataStorage:
                 devices_config = site_data.get("devices") or site_data.get("devices_config", {})
                 point = point.field("devices_json", json.dumps(devices_config))
 
-            # Write to InfluxDB
-            self.influx_client.write_api.write(
-                bucket=self.influx_client.bucket,
-                org=self.influx_client.org,
-                record=point
-            )
+            # Write to InfluxDB - use site-specific bucket
+            bucket_name = self._get_bucket_for_site(site_id)
+            try:
+                self.influx_client.write_api.write(
+                    bucket=bucket_name,
+                    org=self.influx_client.org,
+                    record=point
+                )
+            except Exception as write_error:
+                # If bucket doesn't exist, try default bucket as fallback
+                logger.warning(f"Failed to write to bucket {bucket_name}, trying default: {write_error}")
+                self.influx_client.write_api.write(
+                    bucket=self.influx_client.bucket,
+                    org=self.influx_client.org,
+                    record=point
+                )
 
             logger.debug(f"Saved site metadata to InfluxDB: {site_id}")
             return True
@@ -103,9 +153,11 @@ class InfluxDBMetadataStorage:
             Site configuration dictionary or None if not found or deleted
         """
         try:
+            # Use site-specific bucket
+            bucket_name = self._get_bucket_for_site(site_id)
             # First check if site is marked as deleted
             exists_query = f'''
-            from(bucket: "{self.influx_client.bucket}")
+            from(bucket: "{bucket_name}")
               |> range(start: -10y)
               |> filter(fn: (r) => r["_measurement"] == "{self.sites_measurement}")
               |> filter(fn: (r) => r["site_id"] == "{site_id}")
@@ -136,7 +188,7 @@ class InfluxDBMetadataStorage:
             
             # Query latest record for this site_id (excluding exists field)
             query = f'''
-            from(bucket: "{self.influx_client.bucket}")
+            from(bucket: "{bucket_name}")
               |> range(start: -10y)
               |> filter(fn: (r) => r["_measurement"] == "{self.sites_measurement}")
               |> filter(fn: (r) => r["site_id"] == "{site_id}")
@@ -205,43 +257,70 @@ class InfluxDBMetadataStorage:
     def get_all_sites(self) -> List[Dict[str, Any]]:
         """
         Get all sites from InfluxDB (excluding deleted sites)
+        In site container mode, queries all site buckets
 
         Returns:
             List of site configuration dictionaries
         """
         try:
-            # Query all unique site_ids with their latest exists status
-            query = f'''
-            from(bucket: "{self.influx_client.bucket}")
-              |> range(start: -10y)
-              |> filter(fn: (r) => r["_measurement"] == "{self.sites_measurement}")
-              |> filter(fn: (r) => r["_field"] == "exists")
-              |> group(columns: ["site_id"])
-              |> sort(columns: ["_time"], desc: true)
-              |> first()
-              |> filter(fn: (r) => r["_value"] == true)
-            '''
+            # In site container mode, we need to query all site buckets
+            # First, try to list all site buckets
+            try:
+                buckets_api = self.influx_client.client.buckets_api()
+                buckets = buckets_api.find_buckets()
+                if hasattr(buckets, 'buckets'):
+                    bucket_list = buckets.buckets
+                elif isinstance(buckets, list):
+                    bucket_list = buckets
+                else:
+                    bucket_list = list(buckets) if buckets else []
+                
+                # Filter buckets that match site_* pattern
+                site_buckets = [b.name for b in bucket_list if b.name.startswith("site_")]
+                site_ids = [b.replace("site_", "") for b in site_buckets]
+                
+                # Get full data for each site
+                sites = []
+                for site_id in site_ids:
+                    site_data = self.get_site(site_id)
+                    if site_data:
+                        sites.append(site_data)
+                
+                return sites
+            except Exception as e:
+                logger.warning(f"Failed to list site buckets, trying fallback: {e}")
+                # Fallback: try to query from default bucket (legacy mode)
+                query = f'''
+                from(bucket: "{self.influx_client.bucket}")
+                  |> range(start: -10y)
+                  |> filter(fn: (r) => r["_measurement"] == "{self.sites_measurement}")
+                  |> filter(fn: (r) => r["_field"] == "exists")
+                  |> group(columns: ["site_id"])
+                  |> sort(columns: ["_time"], desc: true)
+                  |> first()
+                  |> filter(fn: (r) => r["_value"] == true)
+                '''
 
-            result = self.influx_client.query_api.query(
-                org=self.influx_client.org,
-                query=query
-            )
+                result = self.influx_client.query_api.query(
+                    org=self.influx_client.org,
+                    query=query
+                )
 
-            site_ids = set()
-            for table in result:
-                for record in table.records:
-                    site_id = record.values.get("site_id")
-                    if site_id:
-                        site_ids.add(site_id)
+                site_ids = set()
+                for table in result:
+                    for record in table.records:
+                        site_id = record.values.get("site_id")
+                        if site_id:
+                            site_ids.add(site_id)
 
-            # Get full data for each site
-            sites = []
-            for site_id in site_ids:
-                site_data = self.get_site(site_id)
-                if site_data:
-                    sites.append(site_data)
+                # Get full data for each site
+                sites = []
+                for site_id in site_ids:
+                    site_data = self.get_site(site_id)
+                    if site_data:
+                        sites.append(site_data)
 
-            return sites
+                return sites
         except Exception as e:
             logger.error(f"Failed to get all sites from InfluxDB: {e}", exc_info=True)
             return []
@@ -268,12 +347,13 @@ class InfluxDBMetadataStorage:
             
             # Delete all site metadata records for this site_id
             predicate = f'_measurement="{self.sites_measurement}" AND site_id="{site_id}"'
+            bucket_name = self._get_bucket_for_site(site_id)
             
             delete_api.delete(
                 start=start_time,
                 stop=stop_time,
                 predicate=predicate,
-                bucket=self.influx_client.bucket,
+                bucket=bucket_name,
                 org=self.influx_client.org
             )
 
@@ -351,12 +431,22 @@ class InfluxDBMetadataStorage:
                 except:
                     pass
 
-            # Write to InfluxDB
-            self.influx_client.write_api.write(
-                bucket=self.influx_client.bucket,
-                org=self.influx_client.org,
-                record=point
-            )
+            # Write to InfluxDB - use site-specific bucket if available
+            bucket_name = self._get_bucket_for_device(device_data)
+            try:
+                self.influx_client.write_api.write(
+                    bucket=bucket_name,
+                    org=self.influx_client.org,
+                    record=point
+                )
+            except Exception as write_error:
+                # If bucket doesn't exist, try default bucket as fallback
+                logger.warning(f"Failed to write to bucket {bucket_name}, trying default: {write_error}")
+                self.influx_client.write_api.write(
+                    bucket=self.influx_client.bucket,
+                    org=self.influx_client.org,
+                    record=point
+                )
 
             logger.debug(f"Saved device metadata to InfluxDB: {device_id}")
             return True
@@ -364,113 +454,134 @@ class InfluxDBMetadataStorage:
             logger.error(f"Failed to save device to InfluxDB: {e}", exc_info=True)
             return False
 
-    def get_device(self, device_id: str) -> Optional[Dict[str, Any]]:
+    def get_device(self, device_id: str, site_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Get device metadata from InfluxDB
 
         Args:
             device_id: Device ID
+            site_id: Optional site ID to specify which bucket to query
 
         Returns:
             Device information dictionary or None if not found or deleted
         """
         try:
-            # First check if device exists (not deleted)
-            # Use group() and last() to ensure we get the latest exists record for this device_id
-            exists_query = f'''
-            from(bucket: "{self.influx_client.bucket}")
-              |> range(start: -10y)
-              |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
-              |> filter(fn: (r) => r["device_id"] == "{device_id}")
-              |> filter(fn: (r) => r["_field"] == "exists")
-              |> group(columns: ["device_id"])
-              |> sort(columns: ["_time"], desc: true)
-              |> limit(n: 1)
-            '''
+            # Try to find device in site bucket if site_id is provided
+            # Otherwise, try all site buckets
+            if site_id:
+                buckets_to_try = [self._get_bucket_for_site(site_id)]
+            else:
+                # Try to find device in all site buckets
+                try:
+                    buckets_api = self.influx_client.client.buckets_api()
+                    buckets = buckets_api.find_buckets()
+                    if hasattr(buckets, 'buckets'):
+                        bucket_list = buckets.buckets
+                    elif isinstance(buckets, list):
+                        bucket_list = buckets
+                    else:
+                        bucket_list = list(buckets) if buckets else []
+                    buckets_to_try = [b.name for b in bucket_list if b.name.startswith("site_")]
+                except:
+                    buckets_to_try = [self.influx_client.bucket]
             
-            exists_result = self.influx_client.query_api.query(
-                org=self.influx_client.org,
-                query=exists_query
-            )
+            # Try each bucket
+            for bucket_name in buckets_to_try:
+                try:
+                    # First check if device exists (not deleted)
+                    exists_query = f'''
+                    from(bucket: "{bucket_name}")
+                      |> range(start: -10y)
+                      |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
+                      |> filter(fn: (r) => r["device_id"] == "{device_id}")
+                      |> filter(fn: (r) => r["_field"] == "exists")
+                      |> group(columns: ["device_id"])
+                      |> sort(columns: ["_time"], desc: true)
+                      |> limit(n: 1)
+                    '''
             
-            # Check if device exists (exists field should be True in the latest record)
-            # Since we use last(), we only get the most recent exists record
-            device_exists = None  # None means no exists record found
-            for table in exists_result:
-                for record in table.records:
-                    exists_value = record.get_value()
-                    # Check if the latest exists record is True
-                    # If exists=False is the latest, device was deleted
-                    if exists_value is True:
-                        device_exists = True
-                        break
-                    elif exists_value is False:
-                        # Latest record shows exists=False, device was deleted
-                        device_exists = False
-                        break
+                    exists_result = self.influx_client.query_api.query(
+                        org=self.influx_client.org,
+                        query=exists_query
+                    )
+                    
+                    # Check if device exists (exists field should be True in the latest record)
+                    device_exists = None  # None means no exists record found
+                    for table in exists_result:
+                        for record in table.records:
+                            exists_value = record.get_value()
+                            if exists_value is True:
+                                device_exists = True
+                                break
+                            elif exists_value is False:
+                                device_exists = False
+                                break
+                    
+                    # If device doesn't exist in this bucket, try next
+                    if device_exists is not True:
+                        continue
+                    
+                    # Query device metadata fields (excluding exists field)
+                    query = f'''
+                    from(bucket: "{bucket_name}")
+                      |> range(start: -10y)
+                      |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
+                      |> filter(fn: (r) => r["device_id"] == "{device_id}")
+                      |> filter(fn: (r) => r["_field"] != "exists")
+                      |> group(columns: ["device_id", "_field"])
+                      |> sort(columns: ["_time"], desc: true)
+                      |> group(columns: ["device_id", "_field"])
+                      |> first()
+                    '''
+
+                    result = self.influx_client.query_api.query(
+                        org=self.influx_client.org,
+                        query=query
+                    )
+
+                    if not result or len(result) == 0:
+                        continue
+
+                    device_data = {"device_id": device_id}
+                    import json
+
+                    for table in result:
+                        for record in table.records:
+                            # Get tags
+                            site_id_tag = record.values.get("site_id")
+                            if site_id_tag:
+                                device_data["site_id"] = site_id_tag
+                            device_type = record.values.get("device_type")
+                            if device_type:
+                                device_data["device_type"] = device_type
+                            integration_name = record.values.get("integration_name")
+                            if integration_name:
+                                device_data["integration_name"] = integration_name
+                            status = record.values.get("status")
+                            if status:
+                                device_data["status"] = status
+
+                            # Get fields
+                            field_name = record.get_field()
+                            field_value = record.get_value()
+
+                            if field_name == "metadata_json":
+                                try:
+                                    device_data["metadata"] = json.loads(field_value)
+                                except:
+                                    device_data["metadata"] = {}
+                            elif field_name == "registered_at":
+                                device_data["registered_at"] = field_value
+                            elif field_name == "last_seen":
+                                device_data["last_seen"] = field_value
+
+                    return device_data if len(device_data) > 1 else None
+                except Exception as e:
+                    logger.debug(f"Failed to query device from bucket {bucket_name}: {e}")
+                    continue
             
-            # If device_exists is False (explicitly deleted) or None (no exists record), return None
-            # Only return device if device_exists is explicitly True
-            if device_exists is not True:
-                # Device doesn't exist, was deleted, or has no exists record (old data)
-                return None
-            
-            # Query device metadata fields (excluding exists field)
-            # Get the latest value for each field by grouping and sorting
-            query = f'''
-            from(bucket: "{self.influx_client.bucket}")
-              |> range(start: -10y)
-              |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
-              |> filter(fn: (r) => r["device_id"] == "{device_id}")
-              |> filter(fn: (r) => r["_field"] != "exists")
-              |> group(columns: ["device_id", "_field"])
-              |> sort(columns: ["_time"], desc: true)
-              |> group(columns: ["device_id", "_field"])
-              |> first()
-            '''
-
-            result = self.influx_client.query_api.query(
-                org=self.influx_client.org,
-                query=query
-            )
-
-            if not result or len(result) == 0:
-                return None
-
-            device_data = {"device_id": device_id}
-            import json
-
-            for table in result:
-                for record in table.records:
-                    # Get tags
-                    site_id = record.values.get("site_id")
-                    if site_id:
-                        device_data["site_id"] = site_id
-                    device_type = record.values.get("device_type")
-                    if device_type:
-                        device_data["device_type"] = device_type
-                    integration_name = record.values.get("integration_name")
-                    if integration_name:
-                        device_data["integration_name"] = integration_name
-                    status = record.values.get("status")
-                    if status:
-                        device_data["status"] = status
-
-                    # Get fields
-                    field_name = record.get_field()
-                    field_value = record.get_value()
-
-                    if field_name == "metadata_json":
-                        try:
-                            device_data["metadata"] = json.loads(field_value)
-                        except:
-                            device_data["metadata"] = {}
-                    elif field_name == "registered_at":
-                        device_data["registered_at"] = field_value
-                    elif field_name == "last_seen":
-                        device_data["last_seen"] = field_value
-
-            return device_data if len(device_data) > 1 else None
+            # Device not found in any bucket
+            return None
         except Exception as e:
             logger.error(f"Failed to get device from InfluxDB: {e}", exc_info=True)
             return None
@@ -478,42 +589,94 @@ class InfluxDBMetadataStorage:
     def get_all_devices(self) -> List[Dict[str, Any]]:
         """
         Get all devices from InfluxDB (excluding deleted devices)
+        In site container mode, queries all site buckets
 
         Returns:
             List of device information dictionaries
         """
         try:
-            # Query all unique device_ids first
-            query_device_ids = f'''
-            from(bucket: "{self.influx_client.bucket}")
-              |> range(start: -10y)
-              |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
-              |> filter(fn: (r) => r["_field"] == "exists")
-              |> group(columns: ["device_id"])
-              |> distinct(column: "device_id")
-            '''
+            # In site container mode, query all site buckets
+            try:
+                buckets_api = self.influx_client.client.buckets_api()
+                buckets = buckets_api.find_buckets()
+                if hasattr(buckets, 'buckets'):
+                    bucket_list = buckets.buckets
+                elif isinstance(buckets, list):
+                    bucket_list = buckets
+                else:
+                    bucket_list = list(buckets) if buckets else []
+                
+                # Filter buckets that match site_* pattern
+                site_buckets = [b.name for b in bucket_list if b.name.startswith("site_")]
+                
+                device_ids = set()
+                # Query each site bucket
+                for bucket_name in site_buckets:
+                    try:
+                        query_device_ids = f'''
+                        from(bucket: "{bucket_name}")
+                          |> range(start: -10y)
+                          |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
+                          |> filter(fn: (r) => r["_field"] == "exists")
+                          |> filter(fn: (r) => r["_value"] == true)
+                          |> group(columns: ["device_id"])
+                          |> distinct(column: "device_id")
+                        '''
 
-            result = self.influx_client.query_api.query(
-                org=self.influx_client.org,
-                query=query_device_ids
-            )
+                        result = self.influx_client.query_api.query(
+                            org=self.influx_client.org,
+                            query=query_device_ids
+                        )
 
-            device_ids = set()
-            for table in result:
-                for record in table.records:
-                    device_id = record.values.get("device_id")
-                    if device_id:
-                        device_ids.add(device_id)
+                        for table in result:
+                            for record in table.records:
+                                device_id = record.values.get("device_id")
+                                if device_id:
+                                    device_ids.add(device_id)
+                    except Exception as e:
+                        logger.debug(f"Failed to query devices from bucket {bucket_name}: {e}")
+                        continue
+                
+                # Get full data for each device
+                devices = []
+                for device_id in device_ids:
+                    device_data = self.get_device(device_id)
+                    if device_data:
+                        devices.append(device_data)
 
-            # Get full data for each device (get_device will check latest exists value)
-            devices = []
-            for device_id in device_ids:
-                device_data = self.get_device(device_id)
-                if device_data:
-                    # Only add if device exists (exists=True in latest record)
-                    devices.append(device_data)
+                return devices
+            except Exception as e:
+                logger.warning(f"Failed to list site buckets, trying fallback: {e}")
+                # Fallback: try to query from default bucket (legacy mode)
+                query_device_ids = f'''
+                from(bucket: "{self.influx_client.bucket}")
+                  |> range(start: -10y)
+                  |> filter(fn: (r) => r["_measurement"] == "{self.devices_measurement}")
+                  |> filter(fn: (r) => r["_field"] == "exists")
+                  |> group(columns: ["device_id"])
+                  |> distinct(column: "device_id")
+                '''
 
-            return devices
+                result = self.influx_client.query_api.query(
+                    org=self.influx_client.org,
+                    query=query_device_ids
+                )
+
+                device_ids = set()
+                for table in result:
+                    for record in table.records:
+                        device_id = record.values.get("device_id")
+                        if device_id:
+                            device_ids.add(device_id)
+
+                # Get full data for each device
+                devices = []
+                for device_id in device_ids:
+                    device_data = self.get_device(device_id)
+                    if device_data:
+                        devices.append(device_data)
+
+                return devices
         except Exception as e:
             logger.error(f"Failed to get all devices from InfluxDB: {e}", exc_info=True)
             return []
@@ -539,13 +702,25 @@ class InfluxDBMetadataStorage:
             stop_time = datetime.now(UTC) + timedelta(days=1)  # Tomorrow
             
             # Delete all device metadata records for this device_id
+            # Try to find device first to determine which bucket to delete from
+            device_data = self.get_device(device_id)
+            if device_data:
+                site_id = device_data.get("site_id")
+                if site_id:
+                    bucket_name = self._get_bucket_for_site(site_id)
+                else:
+                    bucket_name = self.influx_client.bucket
+            else:
+                # Device not found, try default bucket
+                bucket_name = self.influx_client.bucket
+            
             predicate = f'_measurement="{self.devices_measurement}" AND device_id="{device_id}"'
             
             delete_api.delete(
                 start=start_time,
                 stop=stop_time,
                 predicate=predicate,
-                bucket=self.influx_client.bucket,
+                bucket=bucket_name,
                 org=self.influx_client.org
             )
 

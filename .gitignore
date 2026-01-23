@@ -20,7 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# 虚拟环境
+# Virtual environments
 venv/
 env/
 ENV/
@@ -33,20 +33,20 @@ ENV/
 *.swo
 *~
 
-# 环境变量
+# Environment variables
 .env
 .env.local
 
-# 日志
+# Logs
 logs/
 *.log
 
-# 数据库
+# Databases
 *.db
 *.sqlite
 *.sqlite3
 
-# 测试
+# Testing
 .pytest_cache/
 .coverage
 htmlcov/
@@ -55,7 +55,7 @@ htmlcov/
 # Pre-commit
 .pre-commit-config.yaml.bak
 
-# 临时文件
+# Temporary files
 *.tmp
 *.bak
 *.swp
@@ -67,10 +67,10 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
-# 配置文件（包含敏感信息）
+# Configuration files (may contain sensitive information)
 config/local.yaml
 config/production.yaml
-# 站点配置文件（运行时生成，可能包含敏感信息）
+# Site configuration files (generated at runtime, may contain sensitive information)
 config/sites/*.yaml
 config/sites/*.yml
 

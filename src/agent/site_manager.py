@@ -237,29 +237,43 @@ class SiteManager:
         Returns:
             True if rule was added successfully, False otherwise
         """
-        if not self.site_rules_dir:
-            logger.error("Site rules directory not configured")
-            return False
-
         if not self.site_exists(site_id):
             logger.warning(f"Site {site_id} does not exist")
             return False
 
         try:
-            # Load existing rules
-            rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
-            existing_rules = []
-            if rules_file.exists():
-                with open(rules_file, "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f) or {}
-                    existing_rules = config.get("rules", [])
-
-            # Check if rule with same ID already exists
             rule_id = rule.get("id")
-            if rule_id:
+            if not rule_id:
+                logger.error("Rule ID is required")
+                return False
+
+            # Check if rule already exists in PostgreSQL (primary check)
+            if self._postgres_storage:
+                try:
+                    existing_rule = self._postgres_storage.get_rule(site_id, rule_id)
+                    if existing_rule:
+                        logger.warning(f"Rule with ID {rule_id} already exists for site {site_id} in PostgreSQL")
+                        return False
+                except Exception as e:
+                    logger.debug(f"Error checking rule in PostgreSQL: {e}")
+
+            # Also check in file if site_rules_dir is configured (backward compatibility)
+            existing_rules = []
+            if self.site_rules_dir:
+                rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+                if rules_file.exists():
+                    try:
+                        with open(rules_file, "r", encoding="utf-8") as f:
+                            config = yaml.safe_load(f) or {}
+                            existing_rules = config.get("rules", [])
+                    except Exception as e:
+                        logger.debug(f"Error loading rules from file: {e}")
+
+            # Check if rule with same ID already exists in file
+            if existing_rules:
                 for existing_rule in existing_rules:
                     if existing_rule.get("id") == rule_id:
-                        logger.warning(f"Rule with ID {rule_id} already exists for site {site_id}")
+                        logger.warning(f"Rule with ID {rule_id} already exists for site {site_id} in file")
                         return False
 
             # Ensure rule has consistent alarm_type in metadata
@@ -273,24 +287,39 @@ class SiteManager:
                 rule["metadata"]["alarm_type"] = alarm_type
                 logger.debug(f"Auto-generated alarm_type '{alarm_type}' from rule name '{rule_name}'")
 
-            # Add new rule
-            existing_rules.append(rule)
+            # Save to PostgreSQL (primary storage)
+            if self._postgres_storage:
+                try:
+                    if self._postgres_storage.save_rule(site_id, rule):
+                        logger.debug(f"Saved rule {rule_id} to PostgreSQL for site {site_id}")
+                    else:
+                        logger.error(f"Failed to save rule {rule_id} to PostgreSQL for site {site_id}")
+                        return False
+                except Exception as e:
+                    logger.error(f"Failed to save rule to PostgreSQL for site {site_id}: {e}", exc_info=True)
+                    return False
+            else:
+                logger.warning("PostgreSQL storage not configured, rule will not be persisted")
 
-            # Save to file
-            config = {"rules": existing_rules}
-            self.site_rules_dir.mkdir(parents=True, exist_ok=True)
-            with open(rules_file, "w", encoding="utf-8") as f:
-                yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-
-            # Also save to container (database) - dual write
+            # Also save to InfluxDB container (secondary storage) - dual write
             if self._container_manager:
                 try:
                     container = self._container_manager.get_container(site_id, auto_create=True)
                     if container:
                         container.write_rule(rule, flush=True)
-                        logger.debug(f"Saved rule {rule_id} to container for site {site_id}")
+                        logger.debug(f"Saved rule {rule_id} to InfluxDB container for site {site_id}")
                 except Exception as e:
-                    logger.warning(f"Failed to save rule to container for site {site_id}: {e}")
+                    logger.warning(f"Failed to save rule to InfluxDB container for site {site_id}: {e}")
+
+            # Also save to file if site_rules_dir is configured (backward compatibility)
+            if self.site_rules_dir:
+                existing_rules.append(rule)
+                config = {"rules": existing_rules}
+                self.site_rules_dir.mkdir(parents=True, exist_ok=True)
+                rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
+                with open(rules_file, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                logger.debug(f"Saved rule {rule_id} to file for site {site_id}")
 
             # Clear cache in SiteManager
             if site_id in self._site_rules_cache:

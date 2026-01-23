@@ -1042,8 +1042,9 @@ class InfluxDBClient:
             
             # Filter to only numeric fields before aggregation
             # mean() only works on numeric values, not strings
-            # Check if _value exists and is numeric (float or int)
-            query += ' |> filter(fn: (r) => exists r["_value"] and (type(v: r["_value"]) == "float" or type(v: r["_value"]) == "int"))'
+            # aggregateWindow with mean() will automatically skip non-numeric values
+            # We just need to ensure _value exists
+            query += ' |> filter(fn: (r) => exists r._value)'
             
             # Group by device_id and metric to aggregate separately
             group_columns = []

@@ -1,0 +1,244 @@
+/**
+ * Map Styles
+ * Custom styles to match frontend theme with Google Maps style
+ */
+
+/* Leaflet map container - lighter background for better visibility */
+.leaflet-container {
+  background-color: #1f2937 !important; /* gray-800 - lighter than gray-900 */
+  color: #e5e7eb; /* gray-200 */
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Apply filter to make map tiles darker and enhance ocean blue color */
+.leaflet-tile-container img {
+  /* Enhance blue tones for deeper blue ocean, while keeping land readable */
+  filter: brightness(0.75) contrast(1.2) saturate(1.6) hue-rotate(-12deg);
+  -webkit-filter: brightness(0.75) contrast(1.2) saturate(1.6) hue-rotate(-12deg);
+  /* 
+   * brightness(0.75): Darken more for deeper blue
+   * contrast(1.2): Enhance contrast
+   * saturate(1.6): Increase saturation significantly for deeper blue ocean
+   * hue-rotate(-12deg): Shift more towards deeper blue tones
+   */
+}
+
+/* Leaflet popup - glassmorphism dark style */
+.leaflet-popup-content-wrapper {
+  background: rgba(17, 24, 39, 0.9) !important; /* gray-900 with transparency */
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6), 
+              0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+  color: #f3f4f6 !important; /* gray-100 */
+  padding: 0 !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.leaflet-popup-content {
+  color: #f3f4f6 !important; /* gray-100 */
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content * {
+  color: inherit !important;
+}
+
+.leaflet-popup-content p,
+.leaflet-popup-content span,
+.leaflet-popup-content div {
+  color: #f3f4f6 !important; /* gray-100 */
+}
+
+.leaflet-popup-content strong {
+  color: #e5e7eb !important; /* gray-200 */
+}
+
+.leaflet-popup-tip {
+  background: rgba(17, 24, 39, 0.9) !important; /* gray-900 with transparency */
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Close button styling - glassmorphism style */
+.leaflet-popup-close-button {
+  color: #d1d5db !important; /* gray-300 */
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  width: 26px !important;
+  height: 26px !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-decoration: none !important;
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  z-index: 1000 !important;
+  cursor: pointer !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.08) !important;
+}
+
+.leaflet-popup-close-button:active {
+  transform: scale(0.92) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Leaflet controls - match theme */
+.leaflet-control {
+  background-color: #1f2937 !important; /* gray-800 */
+  border: 1px solid #374151 !important; /* gray-700 */
+  border-radius: 0.5rem;
+}
+
+.leaflet-control-zoom a {
+  background-color: #1f2937 !important; /* gray-800 */
+  color: #e5e7eb !important; /* gray-200 */
+  border-bottom: 1px solid #374151 !important; /* gray-700 */
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #374151 !important; /* gray-700 */
+  color: #ffffff !important;
+}
+
+.leaflet-control-attribution {
+  background-color: rgba(31, 41, 55, 0.8) !important; /* gray-800 with opacity */
+  color: #9ca3af !important; /* gray-400 */
+  font-size: 11px;
+}
+
+.leaflet-control-attribution a {
+  color: #60a5fa !important; /* blue-400 */
+}
+
+.leaflet-control-attribution a:hover {
+  color: #93c5fd !important; /* blue-300 */
+}
+
+/* Site Marker with Heartbeat Animation */
+.site-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.site-marker-container {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-marker-icon {
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.site-marker-icon:hover {
+  transform: scale(1.1);
+}
+
+/* Heartbeat pulse animation */
+.site-marker-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #3B82F6; /* Default blue, will be overridden by inline style */
+  background: rgba(59, 130, 246, 0.3); /* Default blue, will be overridden by inline style */
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Trigger animation - always animate when container exists */
+.site-marker-container .site-marker-pulse-1 {
+  animation: heartbeat-pulse 2s ease-out 0s;
+}
+
+.site-marker-container .site-marker-pulse-2 {
+  animation: heartbeat-pulse 2s ease-out 0.4s;
+}
+
+.site-marker-container .site-marker-pulse-3 {
+  animation: heartbeat-pulse 2s ease-out 0.8s;
+}
+
+/* When animation key changes, restart animation */
+.site-marker-container[data-animation-key] .site-marker-pulse {
+  animation: none;
+}
+
+.site-marker-container[data-animation-key] .site-marker-pulse-1 {
+  animation: heartbeat-pulse 2s ease-out 0s;
+}
+
+.site-marker-container[data-animation-key] .site-marker-pulse-2 {
+  animation: heartbeat-pulse 2s ease-out 0.4s;
+}
+
+.site-marker-container[data-animation-key] .site-marker-pulse-3 {
+  animation: heartbeat-pulse 2s ease-out 0.8s;
+}
+
+@keyframes heartbeat-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(2.5);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.5);
+    opacity: 0;
+  }
+}
+
+/* Leaflet marker cluster (if used) */
+.marker-cluster {
+  background-color: rgba(59, 130, 246, 0.6) !important; /* blue-500 with opacity */
+  border: 2px solid #3b82f6 !important; /* blue-500 */
+}
+
+.marker-cluster div {
+  background-color: #3b82f6 !important; /* blue-500 */
+  color: #ffffff !important;
+}
+

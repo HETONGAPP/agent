@@ -1055,6 +1055,12 @@ class InfluxDBClient:
                 columns_str = ', '.join([f'"{col}"' for col in group_columns])
                 query += f' |> group(columns: [{columns_str}])'
             
+            # Before aggregation, ensure we only have numeric _value field
+            # This prevents aggregateWindow from trying to aggregate string fields
+            # Keep only _value field and pivot to ensure only numeric data
+            query += ' |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")'
+            query += ' |> keep(columns: ["_time", "_value"])'
+            
             # Aggregate by time window (only on numeric _value field)
             query += f' |> aggregateWindow(every: {interval}, fn: mean, createEmpty: false)'
             

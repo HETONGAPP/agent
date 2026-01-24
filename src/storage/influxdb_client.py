@@ -166,6 +166,11 @@ class InfluxDBClient:
         if device_type:
             point = point.tag("device_type", device_type)
 
+        # Add rule_name tag from alarm metadata if available (for display purposes)
+        rule_name = alarm.metadata.get("rule_name")
+        if rule_name:
+            point = point.tag("rule_name", rule_name)
+
         # Add site_id tag if available
         point = self._add_site_tag(point, site_id, alarm.metadata)
 
@@ -706,18 +711,21 @@ class InfluxDBClient:
         try:
             # Get bucket name based on site_id and container mode
             bucket_name = self._get_bucket_for_query(site_id)
+            logger.info(f"[InfluxDB] Querying alarms from bucket: {bucket_name}, site_id={site_id}, time_range={start_time}")
             
             # Build Flux query
             query = f'from(bucket: "{bucket_name}")'
-            query += ' |> range(start: -30d)'  # Default range
             
+            # Set time range - use start_time if provided, otherwise default to -30d
             if start_time:
-                query += f' |> range(start: {start_time}'
                 if end_time:
-                    query += f', stop: {end_time}'
-                query += ')'
+                    query += f' |> range(start: {start_time}, stop: {end_time})'
+                else:
+                    query += f' |> range(start: {start_time})'
             elif end_time:
                 query += f' |> range(start: -30d, stop: {end_time})'
+            else:
+                query += ' |> range(start: -30d)'  # Default range
             
             query += ' |> filter(fn: (r) => r["_measurement"] == "alarms")'
             
@@ -738,22 +746,61 @@ class InfluxDBClient:
             query += f' |> limit(n: {limit})'
             
             # Execute query
+            logger.debug(f"[InfluxDB] Executing alarm query: {query}")
             result = self.query_api.query(query=query, org=self.org)
             
             alarms = []
+            record_count = 0
             for table in result:
                 for record in table.records:
+                    record_count += 1
                     alarm = {
                         "alarm_id": record.values.get("alarm_id", ""),
                         "alarm_type": record.values.get("alarm_type", ""),
+                        "rule_name": record.values.get("rule_name", ""),  # Add rule_name for display
                         "severity": record.values.get("severity", ""),
                         "source": record.values.get("source", ""),
                         "device_id": record.values.get("device_id", ""),  # Add device_id
+                        "device_type": record.values.get("device_type", ""),  # Add device_type
                         "timestamp": record.get_time().isoformat(),
                         "site_id": record.values.get("site_id"),
                         "alarm_level": record.values.get("alarm_level", "device_level"),  # Add alarm_level with default
                     }
                     alarms.append(alarm)
+                    if len(alarms) == 1:  # Log first alarm as sample
+                        logger.info(f"[InfluxDB] Sample alarm: alarm_id={alarm['alarm_id']}, alarm_type={alarm['alarm_type']}, site_id={alarm['site_id']}, device_id={alarm['device_id']}")
+            
+            logger.info(f"[InfluxDB] Query returned {record_count} records, {len(alarms)} alarms processed for site_id={site_id}")
+            
+            # If no alarms found with site_id filter, try querying without site_id filter to see if any alarms exist
+            if len(alarms) == 0 and site_id:
+                logger.warning(f"[InfluxDB] No alarms found with site_id={site_id} filter, trying without site_id filter...")
+                # Try querying default bucket without site_id filter
+                default_bucket = self.bucket if self.bucket != "alarms" else "alarms"
+                fallback_query = f'from(bucket: "{default_bucket}")'
+                if start_time:
+                    if end_time:
+                        fallback_query += f' |> range(start: {start_time}, stop: {end_time})'
+                    else:
+                        fallback_query += f' |> range(start: {start_time})'
+                else:
+                    fallback_query += ' |> range(start: -30d)'
+                fallback_query += ' |> filter(fn: (r) => r["_measurement"] == "alarms")'
+                fallback_query += ' |> sort(columns: ["_time"], desc: true)'
+                fallback_query += f' |> limit(n: {limit})'
+                
+                try:
+                    fallback_result = self.query_api.query(query=fallback_query, org=self.org)
+                    fallback_count = 0
+                    for table in fallback_result:
+                        for record in table.records:
+                            fallback_count += 1
+                            record_site_id = record.values.get("site_id")
+                            logger.info(f"[InfluxDB] Found alarm in fallback query: alarm_id={record.values.get('alarm_id')}, site_id={record_site_id}, bucket={default_bucket}")
+                    if fallback_count > 0:
+                        logger.warning(f"[InfluxDB] Found {fallback_count} alarms in fallback query, but site_id filter may be incorrect")
+                except Exception as e:
+                    logger.debug(f"[InfluxDB] Fallback query failed: {e}")
             
             return alarms
         except Exception as e:

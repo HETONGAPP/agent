@@ -16,6 +16,7 @@ from ..variable_knowledge import (
     get_related_variables,
     validate_variable_exists,
 )
+from ...utils.debug import debug_print, is_debug_mode
 
 logger = logging.getLogger(__name__)
 
@@ -90,14 +91,41 @@ Use clear, professional language. Focus on accuracy, specificity, and actionable
         """Generate comprehensive diagnostic report"""
         site_id = context.get("site_id")
 
-        # Collect all analysis results from dependencies
+        # Collect all analysis results from dependencies and context
         all_results = {}
+        
+        # First, try to get all completed results from context (for ReportGeneratorAgent)
+        all_completed_results = context.get("all_completed_results", [])
+        if all_completed_results:
+            if is_debug_mode():
+                logger.warning(f"[ReportGenerator] ⚠️ Found {len(all_completed_results)} completed task results in context")
+                debug_print(f"[ReportGenerator] ⚠️ Found {len(all_completed_results)} completed task results in context")
+            for completed_task in all_completed_results:
+                dep_result = completed_task.get("result", {})
+                agent = dep_result.get("agent", "") or completed_task.get("agent", "")
+                if is_debug_mode():
+                    logger.warning(f"[ReportGenerator] ⚠️ Completed task agent: {agent}, status: {dep_result.get('status')}")
+                    debug_print(f"[ReportGenerator] ⚠️ Completed task agent: {agent}, status: {dep_result.get('status')}")
+                if agent:
+                    all_results[agent] = dep_result
+        
+        # Also collect from direct dependencies (fallback)
         if dependencies:
+            if is_debug_mode():
+                logger.warning(f"[ReportGenerator] ⚠️ Also collecting from {len(dependencies)} direct dependencies")
+                debug_print(f"[ReportGenerator] ⚠️ Also collecting from {len(dependencies)} direct dependencies")
             for dep in dependencies:
                 dep_result = dep.get("result", {})
                 agent = dep_result.get("agent", "")
-                if agent:
+                if agent and agent not in all_results:  # Don't overwrite if already in all_results
+                    if is_debug_mode():
+                        logger.warning(f"[ReportGenerator] ⚠️ Dependency agent: {agent}, status: {dep_result.get('status')}")
+                        debug_print(f"[ReportGenerator] ⚠️ Dependency agent: {agent}, status: {dep_result.get('status')}")
                     all_results[agent] = dep_result
+        
+        if is_debug_mode():
+            logger.warning(f"[ReportGenerator] ⚠️ Final collected results from agents: {list(all_results.keys())}")
+            debug_print(f"[ReportGenerator] ⚠️ Final collected results from agents: {list(all_results.keys())}")
 
         if not all_results:
             return {
@@ -151,6 +179,12 @@ Use clear, professional language. Focus on accuracy, specificity, and actionable
         """Build report generation prompt"""
         prompt = f"""Generate a comprehensive diagnostic report for BESS Site {site_id}.
 
+**⚠️ CRITICAL INSTRUCTION BEFORE YOU START:**
+- You will see a "Data Availability Summary" section below that shows the EXACT number of alarms
+- If that number is > 0, you MUST mention alarms in the "Current Status" section
+- DO NOT say "No alarms detected" if the summary shows alarms exist - this is a contradiction
+- The alarm count in the summary is ACCURATE and comes directly from the analysis
+
 ## Analysis Results Summary
 """
 
@@ -161,11 +195,36 @@ Use clear, professional language. Focus on accuracy, specificity, and actionable
                 prompt += "\n### Alarm Analysis:\n"
                 analysis = result.get("analysis", "")
                 if analysis:
-                    preview = analysis[:300] + "..." if len(analysis) > 300 else analysis
-                    prompt += f"{preview}\n"
+                    # Include full analysis, not just preview
+                    prompt += f"{analysis}\n"
                 insights = result.get("insights", {})
-                prompt += f"- Total Alarms: {insights.get('total_alarms', 0)}\n"
-                prompt += f"- Critical Alarms: {insights.get('critical_count', 0)}\n"
+                alarm_count = insights.get("total_alarms", 0)
+                critical_count = insights.get("critical_count", 0)
+                warning_count = insights.get("warning_count", 0)
+                info_count = insights.get("info_count", 0)
+                by_type = insights.get("by_type", {})
+                by_severity = insights.get("by_severity", {})
+                
+                prompt += f"\n**Alarm Statistics:**\n"
+                prompt += f"- Total Alarms: {alarm_count}\n"
+                prompt += f"- Critical Alarms: {critical_count}\n"
+                prompt += f"- Warning Alarms: {warning_count}\n"
+                prompt += f"- Info Alarms: {info_count}\n"
+                
+                if by_type:
+                    prompt += f"\n**Alarms by Type:**\n"
+                    for alarm_type, count in by_type.items():
+                        prompt += f"- {alarm_type}: {count} alarm(s)\n"
+                
+                if by_severity:
+                    prompt += f"\n**Alarms by Severity:**\n"
+                    for severity, count in by_severity.items():
+                        if count > 0:
+                            prompt += f"- {severity}: {count} alarm(s)\n"
+                
+                # Add explicit note if alarms exist
+                if alarm_count > 0:
+                    prompt += f"\n**⚠️ IMPORTANT: {alarm_count} alarm(s) were detected. You MUST mention these alarms in the Current Status section of your report.**\n"
 
         if "DeviceAnalyzerAgent" in all_results:
             result = all_results["DeviceAnalyzerAgent"]
@@ -220,12 +279,34 @@ Use clear, professional language. Focus on accuracy, specificity, and actionable
         
         if "AlarmAnalyzerAgent" in all_results:
             result = all_results["AlarmAnalyzerAgent"]
+            if is_debug_mode():
+                logger.warning(f"[ReportGenerator] ⚠️ AlarmAnalyzerAgent result status: {result.get('status')}")
+                debug_print(f"[ReportGenerator] ⚠️ AlarmAnalyzerAgent result status: {result.get('status')}")
             if result.get("status") == "success":
                 insights = result.get("insights", {})
                 alarm_count = insights.get("total_alarms", 0)
                 critical_alarm_count = insights.get("critical_count", 0)
+                if is_debug_mode():
+                    logger.warning(f"[ReportGenerator] ⚠️ Alarm count from insights: {alarm_count}, critical: {critical_alarm_count}")
+                    debug_print(f"[ReportGenerator] ⚠️ Alarm count: {alarm_count}, critical: {critical_alarm_count}")
+                    debug_print(f"[ReportGenerator] ⚠️ Full insights: {insights}")
                 if alarm_count > 0:
                     has_alarms = True
+                    if is_debug_mode():
+                        logger.warning(f"[ReportGenerator] ⚠️ ✓ Alarms detected: {alarm_count} total, {critical_alarm_count} critical")
+                        debug_print(f"[ReportGenerator] ⚠️ ✓ Alarms detected: {alarm_count} total, {critical_alarm_count} critical")
+                else:
+                    if is_debug_mode():
+                        logger.warning(f"[ReportGenerator] ⚠️ ✗ No alarms detected (alarm_count={alarm_count})")
+                        debug_print(f"[ReportGenerator] ⚠️ ✗ No alarms detected (alarm_count={alarm_count})")
+            else:
+                if is_debug_mode():
+                    logger.warning(f"[ReportGenerator] ⚠️ AlarmAnalyzerAgent failed: {result.get('error', 'Unknown error')}")
+                    debug_print(f"[ReportGenerator] ⚠️ AlarmAnalyzerAgent failed: {result.get('error', 'Unknown error')}")
+        else:
+            if is_debug_mode():
+                logger.warning(f"[ReportGenerator] ⚠️ AlarmAnalyzerAgent not found in all_results. Available agents: {list(all_results.keys())}")
+                debug_print(f"[ReportGenerator] ⚠️ AlarmAnalyzerAgent not found in all_results. Available agents: {list(all_results.keys())}")
         
         if "DeviceAnalyzerAgent" in all_results:
             result = all_results["DeviceAnalyzerAgent"]
@@ -252,7 +333,12 @@ Use clear, professional language. Focus on accuracy, specificity, and actionable
         prompt += f"""
 ## Data Availability Summary
 
-**Alarm Data**: {"✓ Available" if has_alarms else "✗ No alarms"} ({alarm_count} total, {critical_alarm_count} critical)
+**⚠️ CRITICAL: This summary is the SOURCE OF TRUTH for your report. Use these exact numbers.**
+
+**Alarm Data**: {"⚠️ ✓ Available" if has_alarms else "✗ No alarms"} ({alarm_count} total, {critical_alarm_count} critical)
+- **If the number above is > 0, alarms EXIST and you MUST mention them in Current Status**
+- **If the number is 0, then you can say "No alarms detected"**
+
 **Device Data**: {"✓ Available" if has_devices else "✗ No devices"} ({device_count} devices)
 **Device Types**: {', '.join(device_types) if device_types else "Unknown"} {"(Single device type site)" if len(device_types) == 1 else "(Mixed device types)" if len(device_types) > 1 else ""}
 **Real-time Data**: {"✓ Available" if has_realtime_data else "✗ Not available"}
@@ -299,12 +385,15 @@ Before generating the report, you MUST:
    - Understand variable relationships: Which variables influence others? Which are influenced?
 
 6. **Honesty Requirements**:
-   - If no alarms: State "No alarms detected, system appears to be operating normally"
+   - **CRITICAL: Check the alarm count in "Data Availability Summary" - it is ACCURATE**
+   - **If alarm_count > 0: You MUST state that alarms were detected and describe them (e.g., "X alarm(s) detected, including Y type")**
+   - **If alarm_count = 0: State "No alarms detected, system appears to be operating normally"**
    - If only device registration: State "Devices are registered but insufficient operational data is available for comprehensive diagnosis"
    - If no historical data: State "Insufficient historical data to identify trends or degradation patterns"
    - If single device type: Acknowledge this in your analysis context
    - If variables are missing: State "Variable X is not available in collected data" instead of assuming it exists
    - Never invent problems like "Temperature Sensor Malfunction" unless temperature sensor alarms or data explicitly indicate this
+   - **DO NOT ignore alarms if they are shown in the data availability summary**
 
 ## Report Generation Request
 
@@ -316,12 +405,26 @@ Generate a comprehensive diagnostic report for Site {site_id} using this format:
 ## Current Status
 
 [Write 2-3 sentences describing the overall site health. Be specific and clear.
-- Reference the data availability summary above
-- If no alarms: State "No alarms detected, system appears to be operating normally"
-- If only device registration: State "Devices are registered but insufficient operational data available"
-- If single device type: Mention this context
-- Be honest about what you know vs. what you don't know
-- DO NOT invent problems that are not supported by the analysis results above]
+
+**MANDATORY FORMAT - FOLLOW EXACTLY:**
+
+1. **FIRST, check the "Data Availability Summary" section above - look for the line "Alarm Data: ✓ Available (X total, Y critical)"**
+
+2. **If the summary shows "Alarm Data: ✓ Available" with a number > 0:**
+   - **YOU MUST START with: "X alarm(s) detected" (where X is the exact number from the summary)**
+   - **Then describe the alarm types from the "Alarm Analysis" section**
+   - **Example: "1 alarm detected, related to cell_voltage_deviation. This suggests a potential issue with battery cell voltage readings that requires investigation."**
+   - **DO NOT say "No alarms detected" if the summary shows alarms exist**
+
+3. **If the summary shows "Alarm Data: ✗ No alarms" or count = 0:**
+   - **Then you can say: "No alarms detected, system appears to be operating normally"**
+
+4. **Additional context (if applicable):**
+   - If only device registration: Mention "Devices are registered but insufficient operational data available"
+   - If single device type: Mention this context
+   - Be honest about what you know vs. what you don't know
+
+**CRITICAL: The "Data Availability Summary" is the SOURCE OF TRUTH. If it shows alarms exist, you CANNOT say "No alarms detected" - this is a contradiction that will confuse readers.**]
 
 ## Risk Level
 
@@ -344,11 +447,14 @@ For each potential root cause, you MUST:
 4. Only include if you can answer "yes" to all validation questions
 
 [IMPORTANT: 
-- If no alarms were found: State "No significant issues identified based on available data. No alarms detected."
+- **CRITICAL: Check alarm_count from "Data Availability Summary" - if > 0, alarms exist and you MUST analyze them**
+- **If alarm_count > 0: Analyze the alarm types shown in "Alarm Analysis" section above and identify root causes**
+- **If alarm_count = 0: State "No significant issues identified based on available data. No alarms detected."**
 - If only device registration exists: State "Insufficient operational data available for root cause analysis. Devices are registered but no operational issues detected."
 - If no historical data: State "Insufficient historical data to identify root causes related to trends or degradation."
 - Do NOT invent problems like "Temperature Sensor Malfunction" unless temperature sensor alarms or data explicitly indicate this
-- Do NOT use generic/vague root causes like "System needs monitoring" - be specific or state "No issues identified"]
+- Do NOT use generic/vague root causes like "System needs monitoring" - be specific or state "No issues identified"
+- **DO NOT ignore alarms - if they are shown in the data, they are real and need to be addressed**]
 
 - [Only include root causes that pass the 5 Why and validation checks]
 - [If no issues found, state: "No significant issues identified based on available data"]

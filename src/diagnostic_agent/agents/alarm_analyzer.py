@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 
 from ..base import BaseDiagnosticAgent
 from ...llm_diagnostic.client import LLMClient
+from ...utils.debug import debug_print, is_debug_mode
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +43,54 @@ Provide structured analysis with clear insights and actionable findings.
         # Get alarm data from dependencies
         alarm_data = None
         if dependencies:
+            if is_debug_mode():
+                logger.warning(f"[AlarmAnalyzer] ⚠️ Checking {len(dependencies)} dependencies for alarm data")
+                debug_print(f"[AlarmAnalyzer] ⚠️ Checking {len(dependencies)} dependencies for alarm data")
             for dep in dependencies:
                 dep_result = dep.get("result", {})
-                if dep_result.get("data_type") == "alarms":
+                dep_data_type = dep_result.get("data_type")
+                dep_status = dep_result.get("status")
+                dep_agent = dep_result.get("agent", "unknown")
+                logger.info(f"[AlarmAnalyzer] Dependency: task_id={dep.get('task_id')}, agent={dep_agent}, data_type={dep_data_type}, status={dep_status}")
+                
+                # Log full result structure for debugging
+                if dep_data_type:
+                    data = dep_result.get("data")
+                    if isinstance(data, list):
+                        logger.info(f"[AlarmAnalyzer] Data is a list with {len(data)} items")
+                    elif isinstance(data, dict):
+                        logger.info(f"[AlarmAnalyzer] Data is a dict with keys: {list(data.keys())}")
+                        if "alarms" in data:
+                            logger.info(f"[AlarmAnalyzer] Found 'alarms' key in dict with {len(data['alarms']) if isinstance(data['alarms'], list) else 'non-list'} items")
+                    else:
+                        logger.info(f"[AlarmAnalyzer] Data type: {type(data)}")
+                
+                if dep_data_type == "alarms":
                     alarm_data = dep_result.get("data", [])
+                    alarm_count = len(alarm_data) if alarm_data else 0
+                    if is_debug_mode():
+                        logger.warning(f"[AlarmAnalyzer] ⚠️ ✓ Found alarm data with data_type='alarms': {alarm_count} alarms")
+                        debug_print(f"[AlarmAnalyzer] ⚠️ ✓ Found alarm data: {alarm_count} alarms")
+                        if alarm_data and len(alarm_data) > 0:
+                            logger.warning(f"[AlarmAnalyzer] ⚠️ Sample alarm: {alarm_data[0]}")
+                            debug_print(f"[AlarmAnalyzer] ⚠️ Sample alarm ID: {alarm_data[0].get('alarm_id')}")
                     break
+                elif dep_data_type == "all":
+                    # Handle case where data collector collected all types
+                    all_data = dep_result.get("data", {})
+                    if isinstance(all_data, dict):
+                        alarm_data = all_data.get("alarms", [])
+                        logger.info(f"[AlarmAnalyzer] ✓ Found alarm data in 'all' type: {len(alarm_data) if alarm_data else 0} alarms")
+                        if alarm_data and len(alarm_data) > 0:
+                            logger.info(f"[AlarmAnalyzer] Sample alarm: {alarm_data[0]}")
+                        break
+                    else:
+                        logger.warning(f"[AlarmAnalyzer] Expected dict for 'all' type, got {type(all_data)}")
+        else:
+            logger.warning(f"[AlarmAnalyzer] No dependencies provided for site {site_id}")
 
         if not alarm_data or len(alarm_data) == 0:
+            logger.warning(f"[AlarmAnalyzer] No alarm data found for site {site_id}, returning no alarms message")
             # Return success with no alarms message instead of error
             # This allows the report generator to handle the case gracefully
             return {

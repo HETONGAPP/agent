@@ -1015,6 +1015,44 @@ def register_site_routes(app):
                 content={"status": "error", "message": str(e)},
             )
     
+    @app.get("/api/v1/sites/{site_id}/alarms/debug")
+    async def debug_site_alarms(
+        site_id: str,
+        time_range: str = "-24h",
+        influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
+    ):
+        """Debug endpoint to check if alarms exist for a site"""
+        if not influx_client:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "error", "message": "InfluxDB client not initialized"},
+            )
+        
+        try:
+            # Query alarms directly
+            alarms = influx_client.query_alarms(
+                site_id=site_id,
+                start_time=time_range,
+                limit=100,
+            )
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "site_id": site_id,
+                    "time_range": time_range,
+                    "alarm_count": len(alarms),
+                    "alarms": alarms[:10],  # Return first 10 for debugging
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error querying alarms: {e}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": str(e)},
+            )
+
     @app.post("/api/v1/sites/{site_id}/diagnostics/generate")
     async def generate_site_diagnostic(
         site_id: str,

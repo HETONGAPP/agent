@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 
 from ..base import BaseDiagnosticAgent
 from ...llm_diagnostic.client import LLMClient
+from ...utils.debug import debug_print, is_debug_mode
 
 logger = logging.getLogger(__name__)
 
@@ -101,16 +102,67 @@ You don't need to analyze the data, just collect it accurately.
             return []
 
         try:
+            if is_debug_mode():
+                logger.warning(f"[DataCollector] ⚠️ Querying alarms for site {site_id} with time_range={time_range}")
+                debug_print(f"[DataCollector] ⚠️ Querying alarms for site {site_id} with time_range={time_range}")
             alarms = self.influx_client.query_alarms(
                 site_id=site_id,
                 start_time=time_range,
                 limit=1000,
             )
             # query_alarms returns List[Dict], not Alarm objects
-            logger.info(f"Collected {len(alarms)} alarms for site {site_id}")
+            if is_debug_mode():
+                logger.warning(f"[DataCollector] ⚠️ Collected {len(alarms)} raw alarms for site {site_id}")
+                debug_print(f"[DataCollector] ⚠️ Collected {len(alarms)} raw alarms for site {site_id}")
+            
+            # Deduplicate alarms: keep only the latest alarm for each (device_id, alarm_type) combination
+            # This is important for diagnostic reports to avoid showing hundreds of duplicate alarms
+            if alarms:
+                from datetime import datetime
+                alarm_groups: Dict[tuple, Dict[str, Any]] = {}
+                for alarm in alarms:
+                    device_id = alarm.get("device_id", "")
+                    alarm_type = alarm.get("alarm_type", "")
+                    key = (device_id, alarm_type)
+                    
+                    # Parse timestamp to compare
+                    timestamp_str = alarm.get("timestamp", "")
+                    try:
+                        if timestamp_str:
+                            alarm_time = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                        else:
+                            continue
+                    except:
+                        continue
+                    
+                    # Keep only the latest alarm for each (device_id, alarm_type) combination
+                    if key not in alarm_groups:
+                        alarm_groups[key] = alarm
+                    else:
+                        existing_timestamp_str = alarm_groups[key].get("timestamp", "")
+                        try:
+                            if existing_timestamp_str:
+                                existing_time = datetime.fromisoformat(existing_timestamp_str.replace("Z", "+00:00"))
+                                if alarm_time > existing_time:
+                                    alarm_groups[key] = alarm
+                        except:
+                            pass
+                
+                # Convert back to list
+                deduplicated_alarms = list(alarm_groups.values())
+                if is_debug_mode():
+                    logger.warning(f"[DataCollector] ⚠️ Deduplicated to {len(deduplicated_alarms)} unique alarms (from {len(alarms)} raw alarms)")
+                    debug_print(f"[DataCollector] ⚠️ Deduplicated to {len(deduplicated_alarms)} unique alarms (from {len(alarms)} raw alarms)")
+                    
+                    if deduplicated_alarms:
+                        logger.warning(f"[DataCollector] ⚠️ Sample alarm: {deduplicated_alarms[0]}")
+                        debug_print(f"[DataCollector] ⚠️ Sample alarm ID: {deduplicated_alarms[0].get('alarm_id')}, type: {deduplicated_alarms[0].get('alarm_type')}")
+                
+                return deduplicated_alarms
+            
             return alarms
         except Exception as e:
-            logger.error(f"Failed to collect alarms: {e}", exc_info=True)
+            logger.error(f"[DataCollector] Failed to collect alarms: {e}", exc_info=True)
             return []
 
     async def _collect_devices(self, site_id: str) -> List[Dict[str, Any]]:

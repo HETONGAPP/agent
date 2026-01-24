@@ -40,6 +40,7 @@ class MQTTMessageHandler:
         # Use thread pool executor to safely run async code from sync context
         # Increased workers for better throughput
         self._executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="mqtt_handler")
+        self._shutdown = False  # Flag to track if handler is shutting down
 
     def handle_device_data(self, topic: str, payload: Dict[str, Any]):
         """
@@ -74,13 +75,24 @@ class MQTTMessageHandler:
                     f"data fields: {list(device_data.data.keys())}"
                 )
 
+                # Check if handler is shutting down
+                if self._shutdown:
+                    logger.debug(f"[Handler] Skipping device data processing - handler is shutting down")
+                    return
+
                 # Process through agent service (async call) - use executor to avoid blocking
-                future = self._executor.submit(self._process_device_data_async, device_data)
-                # Don't wait for result to avoid blocking MQTT callback
-                # Result will be logged asynchronously
-                future.add_done_callback(
-                    lambda f: self._log_device_data_result(topic, f)
-                )
+                try:
+                    future = self._executor.submit(self._process_device_data_async, device_data)
+                    # Don't wait for result to avoid blocking MQTT callback
+                    # Result will be logged asynchronously
+                    future.add_done_callback(
+                        lambda f: self._log_device_data_result(topic, f)
+                    )
+                except RuntimeError as e:
+                    if "shutdown" in str(e).lower():
+                        logger.debug(f"[Handler] Executor is shutting down, skipping device data processing")
+                    else:
+                        raise
             else:
                 logger.warning(f"⚠ [Handler] Invalid topic format: {topic}")
 
@@ -110,12 +122,23 @@ class MQTTMessageHandler:
                 # Create DeviceData from alarm payload
                 device_data = self._parse_alarm_data(payload, site_id, alarm_type)
 
+                # Check if handler is shutting down
+                if self._shutdown:
+                    logger.debug(f"[Handler] Skipping alarm processing - handler is shutting down")
+                    return
+
                 # Process through agent service (async call) - use executor to avoid blocking
-                future = self._executor.submit(self._process_device_data_async, device_data)
-                # Don't wait for result to avoid blocking MQTT callback
-                future.add_done_callback(
-                    lambda f: self._log_alarm_result(topic, f)
-                )
+                try:
+                    future = self._executor.submit(self._process_device_data_async, device_data)
+                    # Don't wait for result to avoid blocking MQTT callback
+                    future.add_done_callback(
+                        lambda f: self._log_alarm_result(topic, f)
+                    )
+                except RuntimeError as e:
+                    if "shutdown" in str(e).lower():
+                        logger.debug(f"[Handler] Executor is shutting down, skipping alarm processing")
+                    else:
+                        raise
             else:
                 logger.warning(f"Invalid topic format: {topic}")
 
@@ -161,7 +184,13 @@ class MQTTMessageHandler:
 
     def shutdown(self):
         """Shutdown the executor"""
-        self._executor.shutdown(wait=True)
+        logger.info("[Handler] Shutting down MQTT message handler...")
+        self._shutdown = True  # Set flag to prevent new tasks
+        try:
+            self._executor.shutdown(wait=True)
+            logger.info("[Handler] MQTT message handler shutdown complete")
+        except Exception as e:
+            logger.warning(f"[Handler] Error during shutdown: {e}")
 
     def _parse_device_data(
         self, payload: Dict[str, Any], site_id: str, device_type_str: str

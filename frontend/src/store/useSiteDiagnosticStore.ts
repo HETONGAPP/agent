@@ -34,24 +34,36 @@ interface SiteDiagnosticStore {
 
 export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
   persist(
-    (set, get) => ({
-      diagnostics: {},
-      shownDiagnosticToasts: new Set<string>(),
+    (set, get) => {
+      // Helper to ensure shownDiagnosticToasts is always a Set
+      const ensureSet = (value: any): Set<string> => {
+        if (value instanceof Set) {
+          return value;
+        }
+        if (Array.isArray(value)) {
+          return new Set(value);
+        }
+        return new Set<string>();
+      };
 
-      startDiagnostic: (siteId: string, diagnosticId?: string) => {
-        set((state) => ({
-          diagnostics: {
-            ...state.diagnostics,
-            [siteId]: {
-              siteId,
-              isGenerating: true,
-              startTime: Date.now(),
-              diagnosticId: diagnosticId || null,
-              maxDuration: 30 * 60 * 1000, // 30 minutes
+      return {
+        diagnostics: {},
+        shownDiagnosticToasts: new Set<string>(),
+
+        startDiagnostic: (siteId: string, diagnosticId?: string) => {
+          set((state) => ({
+            diagnostics: {
+              ...state.diagnostics,
+              [siteId]: {
+                siteId,
+                isGenerating: true,
+                startTime: Date.now(),
+                diagnosticId: diagnosticId || null,
+                maxDuration: 30 * 60 * 1000, // 30 minutes
+              },
             },
-          },
-        }));
-      },
+          }));
+        },
 
       completeDiagnostic: (siteId: string) => {
         set((state) => {
@@ -102,17 +114,25 @@ export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
       },
 
       hasShownToast: (diagnosticId: string) => {
-        return get().shownDiagnosticToasts.has(diagnosticId);
+        const toasts = get().shownDiagnosticToasts;
+        const toastSet = ensureSet(toasts);
+        // If it wasn't a Set, update the state
+        if (!(toasts instanceof Set)) {
+          set({ shownDiagnosticToasts: toastSet });
+        }
+        return toastSet.has(diagnosticId);
       },
 
       markToastShown: (diagnosticId: string) => {
         set((state) => {
-          const newSet = new Set(state.shownDiagnosticToasts);
+          const currentSet = ensureSet(state.shownDiagnosticToasts);
+          const newSet = new Set(currentSet);
           newSet.add(diagnosticId);
           return { shownDiagnosticToasts: newSet };
         });
       },
-    }),
+      };
+    },
     {
       name: 'site-diagnostic-storage',
       // Only persist isGenerating and startTime, not diagnosticId (it's temporary)
@@ -130,8 +150,17 @@ export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
             },
           ])
         ),
-        shownDiagnosticToasts: new Set<string>(), // Reset on persist
+        // Don't persist shownDiagnosticToasts - always reset to empty Set
+        shownDiagnosticToasts: [],
       }),
+      // Custom merge function to ensure shownDiagnosticToasts is always a Set
+      merge: (persistedState: any, currentState: any) => {
+        return {
+          ...currentState,
+          ...persistedState,
+          shownDiagnosticToasts: new Set<string>(), // Always reset to empty Set on load
+        };
+      },
     }
   )
 );

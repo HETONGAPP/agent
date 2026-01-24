@@ -116,7 +116,7 @@ llm:
   # General configuration
   temperature: 0.3
   max_tokens: 2000
-  timeout: 30
+  timeout: 50
   retry_times: 3
   retry_delay: 1
   cache_ttl: 3600 # Cache time (seconds)

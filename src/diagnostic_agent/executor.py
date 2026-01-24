@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 
 from .task_manager import DiagnosticTaskManager, DiagnosticTask, TaskStatus
 from .base import BaseDiagnosticAgent
+from ..utils.debug import debug_print, is_debug_mode
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,24 @@ class DiagnosticExecutor:
             "task_id": task.task_id,
             "task_description": task.description,
         }
+        
+        # For ReportGeneratorAgent, include all completed task results
+        # so it can access results from all agents, not just direct dependencies
+        if task.agent == "ReportGeneratorAgent":
+            all_completed_results = []
+            for completed_task in self.task_manager.tasks:
+                if completed_task.status == TaskStatus.COMPLETED and completed_task.result:
+                    all_completed_results.append({
+                        "task_id": completed_task.task_id,
+                        "description": completed_task.description,
+                        "agent": completed_task.agent,
+                        "result": completed_task.result,
+                    })
+            context["all_completed_results"] = all_completed_results
+            if is_debug_mode():
+                logger.warning(f"[Executor] ⚠️ Added {len(all_completed_results)} completed task results to ReportGenerator context")
+                debug_print(f"[Executor] ⚠️ Added {len(all_completed_results)} completed task results to ReportGenerator context")
+        
         return context
 
     def _get_dependency_results(self, task: DiagnosticTask) -> List[Dict[str, Any]]:

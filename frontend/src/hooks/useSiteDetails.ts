@@ -321,19 +321,30 @@ export const useSiteDetails = ({ siteId }: UseSiteDetailsOptions): UseSiteDetail
   // Auto-select devices when devices are loaded
   useEffect(() => {
     if (devices.length > 0 && selectedDevices.length === 0) {
-      setSelectedDevices([devices[0].device_id]);
+      const firstDevice = devices[0];
+      console.log('[useSiteDetails] Auto-selecting first device:', firstDevice.device_id, 'type:', firstDevice.device_type);
+      setSelectedDevices([firstDevice.device_id]);
+      
+      // Auto-select first metric if available
       if (availableMetrics.length > 0 && !selectedMetric) {
-        setSelectedMetric(availableMetrics[0]);
+        const firstMetric = availableMetrics[0];
+        console.log('[useSiteDetails] Auto-selecting first metric:', firstMetric);
+        setSelectedMetric(firstMetric);
+      } else if (availableMetrics.length === 0) {
+        console.warn('[useSiteDetails] No available metrics for device type:', firstDevice.device_type);
       }
     }
     
+    // Validate selected devices
     if (selectedDevices.length > 0) {
       const validDevices = selectedDevices.filter(deviceId => 
         devices.some(d => d.device_id === deviceId)
       );
       if (validDevices.length !== selectedDevices.length) {
+        console.log('[useSiteDetails] Updating selected devices to valid ones:', validDevices);
         setSelectedDevices(validDevices);
       } else if (devices.length === 0 && selectedDevices.length > 0) {
+        console.log('[useSiteDetails] Clearing selected devices (no devices available)');
         setSelectedDevices([]);
       }
     }
@@ -347,9 +358,22 @@ export const useSiteDetails = ({ siteId }: UseSiteDetailsOptions): UseSiteDetail
     }
     
     if (!siteId || selectedDevices.length === 0 || !selectedMetric) {
+      console.log('[useSiteDetails] Skipping fetchDeviceTimeSeries - missing params:', {
+        siteId,
+        selectedDevices: selectedDevices.length,
+        selectedMetric,
+      });
       setDeviceTimeSeries([]);
       return;
     }
+    
+    console.log('[useSiteDetails] Fetching device time series:', {
+      siteId,
+      selectedDevices,
+      selectedMetric,
+      timeRange,
+      interval,
+    });
     
     const validDevices = selectedDevices.filter(deviceId => 
       devices.some(d => d.device_id === deviceId)
@@ -393,26 +417,47 @@ export const useSiteDetails = ({ siteId }: UseSiteDetailsOptions): UseSiteDetail
       // For incremental updates, use 'since' parameter to only fetch new data
       // This reduces data transfer and processing time
       let sinceParam: string | undefined = undefined;
+      let startTimeParam: string | undefined = timeRange; // Always use timeRange for initial query
+      
       if (!queryChanged && previousTimeSeriesRef.current.length > 0) {
         // Get the last timestamp from previous data
         const lastPoint = previousTimeSeriesRef.current[previousTimeSeriesRef.current.length - 1];
         if (lastPoint?.timestamp) {
           // Use the last timestamp as 'since' to only get new data
           sinceParam = lastPoint.timestamp;
+          // When using 'since', don't use start_time (backend will ignore it)
+          startTimeParam = undefined;
         }
       }
+
+      console.log('[useSiteDetails] Calling getDeviceTimeSeries with params:', {
+        device_ids: validDevices,
+        site_id: siteId,
+        metric: selectedMetric,
+        start_time: startTimeParam,
+        interval: interval,
+        since: sinceParam,
+        queryChanged,
+      });
 
       const response = await getDeviceTimeSeries({
         device_ids: validDevices,
         site_id: siteId,
         metric: selectedMetric,
-        start_time: queryChanged ? timeRange : undefined, // Only use start_time for initial load
+        start_time: startTimeParam, // Always use timeRange for initial query
         interval: interval,
         since: sinceParam, // Use since for incremental updates
       });
       
+      console.log('[useSiteDetails] Device time series response:', {
+        status: response.status,
+        dataCount: response.data?.time_series?.length || 0,
+        total: response.data?.total || 0,
+      });
+      
       if (response.status === 'success' && response.data) {
         const newData = response.data.time_series || [];
+        console.log('[useSiteDetails] Received time series data:', newData.length, 'points');
         
         const validData = newData.filter(point => {
           if (!point || !point.timestamp) return false;
@@ -550,11 +595,29 @@ export const useSiteDetails = ({ siteId }: UseSiteDetailsOptions): UseSiteDetail
           }
         }
       } else {
-        setDeviceTimeSeries([]);
-        previousTimeSeriesRef.current = [];
+        console.warn('[useSiteDetails] API returned success but no data:', {
+          status: response.status,
+          message: response.message,
+          data: response.data,
+        });
+        // Only clear data if this is an initial query (queryChanged = true)
+        // For incremental queries, keep previous data
+        if (queryChanged) {
+          setDeviceTimeSeries([]);
+          previousTimeSeriesRef.current = [];
+        }
       }
     } catch (error) {
       console.error('[useSiteDetails] Error fetching device time series data:', error);
+      console.error('[useSiteDetails] Error details:', {
+        siteId,
+        selectedDevices,
+        selectedMetric,
+        timeRange,
+        interval,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
       setDeviceTimeSeries([]);
       previousTimeSeriesRef.current = [];
     } finally {
@@ -567,9 +630,19 @@ export const useSiteDetails = ({ siteId }: UseSiteDetailsOptions): UseSiteDetail
 
   // Fetch data when selection changes
   useEffect(() => {
+    console.log('[useSiteDetails] Selection changed, checking if should fetch:', {
+      selectedDevices: selectedDevices.length,
+      selectedMetric,
+      siteId,
+      devicesCount: devices.length,
+      availableMetricsCount: availableMetrics.length,
+    });
+    
     if (selectedDevices.length > 0 && selectedMetric && siteId) {
+      console.log('[useSiteDetails] Triggering fetchDeviceTimeSeries');
       fetchDeviceTimeSeries();
     } else {
+      console.log('[useSiteDetails] Clearing time series data - missing selection');
       setDeviceTimeSeries([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

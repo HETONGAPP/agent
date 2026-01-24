@@ -416,6 +416,7 @@ export const SiteDetails = () => {
           onClick={() => navigate('/datacenter')}
           className="hover:text-white transition-colors duration-200 flex items-center gap-1.5 group"
         >
+          <ArrowLeft size={16} className="text-gray-400 group-hover:text-white group-hover:-translate-x-0.5 transition-all duration-200" />
           <span>Data Center</span>
           <span className="text-gray-600">/</span>
         </button>
@@ -424,16 +425,8 @@ export const SiteDetails = () => {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-gray-700/50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/datacenter')}
-            className="p-2 rounded-lg hover:bg-gray-800/50 transition-all duration-200 group -ml-2"
-            aria-label="Back to Data Center"
-          >
-            <ArrowLeft size={20} className="text-gray-400 group-hover:text-white group-hover:-translate-x-1 transition-all duration-200" />
-          </button>
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">{selectedSite.site_name}</h1>
+        <div>
+          <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">{selectedSite.site_name}</h1>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-gray-400 text-sm font-mono bg-gray-800/50 px-2.5 py-1 rounded-md border border-gray-700/50 flex-shrink-0">
                 ID: {selectedSite.site_id}
@@ -451,7 +444,6 @@ export const SiteDetails = () => {
                 </span>
               )}
             </div>
-          </div>
         </div>
         <div className="flex items-center gap-3">
           <Button

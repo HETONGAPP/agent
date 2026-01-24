@@ -42,6 +42,7 @@ class BaseLLMClient(ABC):
         self.retry_delay = config.get("retry_delay", 1)
         self.temperature = config.get("temperature", 0.3)
         self.max_tokens = config.get("max_tokens", 2000)
+        logger.info(f"[LLM Client] Initialized with timeout={self.timeout}s, retry_times={self.retry_times}, temperature={self.temperature}")
 
     @abstractmethod
     async def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:

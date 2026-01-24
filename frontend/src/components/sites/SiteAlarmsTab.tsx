@@ -8,17 +8,12 @@ import { useAlarms } from '@/hooks/useAlarms';
 import { useWebSocket, EventType } from '@/hooks/useWebSocket';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { Pagination } from '@/components/ui/Pagination';
-import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { Alarm, AlarmFilters } from '@/types';
 import { ALARM_SEVERITY } from '@/config/constants';
 import { formatRelativeTime } from '@/utils/date';
-import { exportAlarms } from '@/utils/export';
-import { useToastStore } from '@/store/useToastStore';
-import { Link } from 'react-router-dom';
-import { MapPin, Brain, Filter, AlertTriangle } from 'lucide-react';
-import { generateAlarmDiagnostic } from '@/api/diagnostics';
+import { Filter, AlertTriangle } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { websocketEventManager } from '@/services/websocketEventManager';
 
@@ -38,10 +33,8 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
     setPagination,
   } = useAlarms(false, { site_id: siteId }); // Don't auto-fetch, we'll fetch manually with site_id filter
 
-  const { addToast } = useToastStore();
   const [filters, setLocalFilters] = useState<AlarmFilters>({ site_id: siteId });
   const [selectedSeverity, setSelectedSeverity] = useState<string>('');
-  const [generatingDiagnostics, setGeneratingDiagnostics] = useState<Set<string>>(new Set());
   
   // WebSocket for real-time updates
   const wsEvents = useCallback(() => [
@@ -124,43 +117,28 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
     fetchAlarms(filters, limit, offset, false);
   };
 
-  const handleGenerateDiagnostic = async (alarmId: string) => {
-    setGeneratingDiagnostics(prev => new Set(prev).add(alarmId));
-    try {
-      const response = await generateAlarmDiagnostic(alarmId);
-      if (response.status === 'success') {
-        addToast('Diagnostic generated successfully', 'success');
-        // Refresh alarms to get updated diagnostic
-        fetchAlarms(filters, 15, pagination.offset, false);
-      } else {
-        addToast(response.message || 'Failed to generate diagnostic', 'error');
-      }
-    } catch (error: any) {
-      console.error('Error generating diagnostic:', error);
-      addToast(error?.message || 'Failed to generate diagnostic', 'error');
-    } finally {
-      setGeneratingDiagnostics(prev => {
-        const next = new Set(prev);
-        next.delete(alarmId);
-        return next;
-      });
-    }
-  };
-
   const columns: Column<Alarm>[] = [
     {
       key: 'alarm_id',
       header: 'Alarm ID',
-      render: (alarm) => (
-        <span className="font-mono text-blue-400">{alarm.alarm_id}</span>
-      ),
+      render: (alarm) => {
+        // Remove "RULE_" prefix and any rule-related text from alarm_id for display
+        const displayId = alarm.alarm_id.replace(/^RULE_/i, '').replace(/_RULE_/gi, '_');
+        return (
+          <span className="font-mono text-blue-400">{displayId}</span>
+        );
+      },
     },
     {
       key: 'alarm_type',
       header: 'Type',
-      render: (alarm) => (
-        <span className="text-gray-300">{alarm.alarm_type}</span>
-      ),
+      render: (alarm) => {
+        // Display rule_name (friendly name) if available, otherwise fall back to alarm_type
+        const displayName = alarm.rule_name || alarm.alarm_type;
+        return (
+          <span className="text-gray-300">{displayName}</span>
+        );
+      },
     },
     {
       key: 'severity',
@@ -170,29 +148,32 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
       ),
     },
     {
-      key: 'alarm_level',
-      header: 'Level',
-      render: (alarm) => {
-        const level = (alarm as any).alarm_level || 'device_level';
-        const levelMap: Record<string, { label: string; colorClass: string }> = {
-          system_level: { label: 'System', colorClass: 'bg-purple-500/20 text-purple-400 border-purple-500/50' },
-          site_level: { label: 'Site', colorClass: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
-          device_level: { label: 'Device', colorClass: 'bg-gray-500/20 text-gray-400 border-gray-500/50' },
-        };
-        const levelInfo = levelMap[level] || levelMap.device_level;
-        return (
-          <span className={`badge border px-2 py-0.5 text-xs ${levelInfo.colorClass}`}>
-            {levelInfo.label}
-          </span>
-        );
-      },
-    },
-    {
       key: 'source',
       header: 'Source',
       render: (alarm) => (
-        <span className="text-gray-300">{alarm.source}</span>
+        <span className="text-gray-300 font-mono">{alarm.device_id || alarm.source || '-'}</span>
       ),
+    },
+    {
+      key: 'device_type',
+      header: 'Level',
+      render: (alarm) => {
+        const deviceType = alarm.device_type || 'Unknown';
+        const typeColorMap: Record<string, string> = {
+          BMS: 'bg-blue-500/20 text-blue-400 border-blue-500/50',
+          PCS: 'bg-green-500/20 text-green-400 border-green-500/50',
+          EMS: 'bg-purple-500/20 text-purple-400 border-purple-500/50',
+          HVAC: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50',
+          Meter: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50',
+          Unknown: 'bg-gray-500/20 text-gray-400 border-gray-500/50',
+        };
+        const colorClass = typeColorMap[deviceType] || typeColorMap.Unknown;
+        return (
+          <span className={`badge border px-2 py-0.5 text-xs ${colorClass}`}>
+            {deviceType}
+          </span>
+        );
+      },
     },
     {
       key: 'timestamp',
@@ -201,33 +182,6 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
         <span className="text-gray-400 text-xs">
           {formatRelativeTime(alarm.timestamp)}
         </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (alarm) => (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleGenerateDiagnostic(alarm.alarm_id)}
-            disabled={generatingDiagnostics.has(alarm.alarm_id)}
-            className="text-xs"
-          >
-            {generatingDiagnostics.has(alarm.alarm_id) ? (
-              <>
-                <LoadingSpinner size="xs" className="mr-1" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Brain size={12} className="mr-1" />
-                Diagnostic
-              </>
-            )}
-          </Button>
-        </div>
       ),
     },
   ];

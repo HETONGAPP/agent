@@ -176,13 +176,20 @@ export const SiteTimeSeriesChart = ({
       {loadingTimeSeries ? (
         <div className="flex items-center justify-center h-[300px] text-gray-400">
           <LoadingSpinner />
+          <span className="ml-3 text-sm">Loading time series data...</span>
         </div>
       ) : selectedDevices.length === 0 || !selectedMetric ? (
         <div className="flex items-center justify-center h-[300px] text-gray-400">
           <div className="text-center">
             <Activity size={48} className="mx-auto mb-4 text-gray-600" />
             <p className="text-lg mb-2">No data selected</p>
-            <p className="text-sm">Please select devices and a metric to view data</p>
+            <p className="text-sm mb-2">Please select devices and a metric to view data</p>
+            <p className="text-xs text-gray-500 mt-2">
+              {selectedDevices.length === 0 && 'No device selected. '}
+              {!selectedMetric && 'No metric selected. '}
+              {devices.length === 0 && 'No devices available for this site.'}
+              {devices.length > 0 && availableMetrics.length === 0 && 'No metrics available for device types.'}
+            </p>
           </div>
         </div>
       ) : formattedChartData.length > 0 ? (
@@ -231,6 +238,12 @@ export const SiteTimeSeriesChart = ({
             <p className="text-sm mb-2">No data found for selected devices and metric</p>
             <p className="text-xs text-gray-500 mt-2">
               Site: {siteId} | Devices: {selectedDevices.join(', ')} | Metric: {selectedMetric}
+            </p>
+            <p className="text-xs text-gray-600 mt-2">
+              Total data points received: {deviceTimeSeries.length} | Filtered: {formattedChartData.length}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Make sure the device is sending data and the time range includes recent data.
             </p>
           </div>
         </div>

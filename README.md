@@ -42,6 +42,10 @@ curl http://localhost:8000/health
 
 Main environment variables (`.env` file):
 
+- `DEBUG` - Debug mode switch (default: `false`)
+  - Set to `true` to enable debug mode: Shows all logs including INFO and WARNING
+  - Set to `false` to disable debug mode: Only shows ERROR and above (cleaner output)
+  - Example: `DEBUG=true` or `DEBUG=false`
 - `OPENAI_API_KEY` - LLM API key
 - `INFLUXDB_TOKEN` - InfluxDB access token
 - `INFLUXDB_URL` - InfluxDB URL (default: http://localhost:8086)

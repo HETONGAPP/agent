@@ -27,9 +27,12 @@ export interface DeviceStats {
 export interface Alarm {
   alarm_id: string;
   alarm_type: string;
+  rule_name?: string;  // Friendly rule name for display (e.g., "BMS Cell Voltage Deviation")
   severity: AlarmSeverity;
   timestamp: string;
   source: string;
+  device_id?: string;
+  device_type?: string;
   site_id?: string;
   alarm_level?: 'system_level' | 'site_level' | 'device_level';
   diagnostic?: Diagnostic;

@@ -4,7 +4,16 @@ All modules should use this configuration for consistent log formatting
 Preserves Uvicorn's default colored output
 """
 
+import os
 import logging
+
+# Global debug mode flag - can be set via environment variable DEBUG=true/false
+# When DEBUG=true: Only show WARNING and above (hide INFO and DEBUG logs)
+# When DEBUG=false: Show INFO and above (normal operation)
+DEBUG_MODE = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes", "on")
+
+# Export for use in other modules
+__all__ = ["DEBUG_MODE", "configure_uvicorn_logging"]
 
 
 class WebSocketConnectionFilter(logging.Filter):
@@ -150,6 +159,16 @@ def configure_uvicorn_logging():
             return root_logger._original_addHandler(handler)
         root_logger.addHandler = root_addHandler_with_filter
     
+    # Set log level based on DEBUG mode
+    # DEBUG=true: Show all logs including INFO and WARNING (detailed debugging)
+    # DEBUG=false: Only show ERROR and above (hide INFO and WARNING for cleaner output)
+    if DEBUG_MODE:
+        app_log_level = logging.INFO  # Show INFO, WARNING, ERROR, CRITICAL (all logs)
+        print(f"[LoggingConfig] DEBUG mode ENABLED - Showing all logs (INFO, WARNING, ERROR)")
+    else:
+        app_log_level = logging.ERROR  # Only show ERROR, CRITICAL (hide INFO and WARNING)
+        print(f"[LoggingConfig] DEBUG mode DISABLED - Showing ERROR and above only (hiding INFO and WARNING)")
+    
     # Configure all application loggers to propagate to uvicorn logger
     # This makes them use Uvicorn's colored format automatically
     for logger_name in [
@@ -163,9 +182,10 @@ def configure_uvicorn_logging():
         "src.email",
         "src.rule_engine",
         "src.integrations",
+        "src.diagnostic_agent",  # Add diagnostic agent loggers
     ]:
         logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(app_log_level)
         # Remove any existing handlers to avoid duplicate logs
         logger.handlers = []
         # Propagate to root logger (which Uvicorn has configured with colors)

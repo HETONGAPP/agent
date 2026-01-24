@@ -181,12 +181,15 @@ def register_diagnostic_routes(app):
     async def get_diagnostic_stats(
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
+        site_id: Optional[str] = None,
+        risk_level: Optional[str] = None,
+        device_type: Optional[str] = None,
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
         query_cache = Depends(get_query_cache),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
-        """Get diagnostic report statistics"""
+        """Get diagnostic report statistics with optional filters"""
         if not influx_client:
             return JSONResponse(
                 status_code=503,
@@ -197,10 +200,13 @@ def register_diagnostic_routes(app):
             )
         
         try:
-            # Check cache first
+            # Check cache first (include filters in cache key)
             cache_params = {
                 "start_time": start_time,
                 "end_time": end_time,
+                "site_id": site_id,
+                "risk_level": risk_level,
+                "device_type": device_type,
             }
             
             if query_cache:
@@ -214,8 +220,12 @@ def register_diagnostic_routes(app):
             
             # Use site container if available (same logic as list_diagnostics)
             if agent_service and agent_service.container_manager:
-                # Query all containers concurrently for better performance
-                all_containers = agent_service.container_manager.list_containers()
+                # If site_id is specified, only query that container
+                if site_id:
+                    containers_to_query = [site_id]
+                else:
+                    containers_to_query = agent_service.container_manager.list_containers()
+                
                 all_diagnostics = []
                 
                 def query_container_diagnostics_for_stats(container_site_id: str):
@@ -227,6 +237,8 @@ def register_diagnostic_routes(app):
                             return container.query_diagnostics(
                                 start_time=start_time,
                                 end_time=end_time,
+                                risk_level=risk_level,
+                                device_type=device_type,
                                 limit=500,  # Reduced from 10000 for better performance
                             )
                     except Exception as e:
@@ -235,7 +247,7 @@ def register_diagnostic_routes(app):
                 
                 # Use concurrent queries for better performance
                 with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = {executor.submit(query_container_diagnostics_for_stats, cid): cid for cid in all_containers}
+                    futures = {executor.submit(query_container_diagnostics_for_stats, cid): cid for cid in containers_to_query}
                     for future in concurrent.futures.as_completed(futures):
                         try:
                             result = future.result()
@@ -251,6 +263,9 @@ def register_diagnostic_routes(app):
                 diagnostics = influx_client.query_diagnostics(
                     start_time=start_time,
                     end_time=end_time,
+                    risk_level=risk_level,
+                    site_id=site_id,
+                    device_type=device_type,
                     limit=500,  # Reduced from 10000 for better performance
                 )
             

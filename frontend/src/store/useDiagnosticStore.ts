@@ -107,9 +107,9 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
   },
 
   // Fetch statistics
-  fetchStats: async (startTime?: string, endTime?: string) => {
+  fetchStats: async (startTime?: string, endTime?: string, filters?: DiagnosticFilters) => {
     try {
-      const response: ApiResponse<DiagnosticStats> = await getDiagnosticStats(startTime, endTime);
+      const response: ApiResponse<DiagnosticStats> = await getDiagnosticStats(startTime, endTime, filters);
       
       if (response.status === 'success' && response.data) {
         // Only update if stats actually changed to prevent unnecessary re-renders

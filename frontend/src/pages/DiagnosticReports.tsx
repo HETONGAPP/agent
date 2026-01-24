@@ -96,8 +96,9 @@ export const DiagnosticReports = () => {
       setFilters({});
     }
     // Delay stats fetch to avoid blocking the initial render
+    // Pass current filters to stats to keep them in sync
     setTimeout(() => {
-      fetchStats();
+      fetchStats(undefined, undefined, initialFilters);
     }, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,7 +126,7 @@ export const DiagnosticReports = () => {
         // Use startTransition to mark stats update as non-urgent
         // This prevents UI blocking and flashing
         startTransition(() => {
-          fetchStats();
+          fetchStats(undefined, undefined, filters);
         });
       }
     },
@@ -212,6 +213,8 @@ export const DiagnosticReports = () => {
     setFilters(newFilters);
     fetchDiagnostics(newFilters, pagination.limit, 0);
     setPagination(pagination.limit, 0);
+    // Also update stats with new filters to keep them in sync
+    fetchStats(undefined, undefined, newFilters);
   };
 
   const handleClearFilters = () => {
@@ -417,7 +420,7 @@ export const DiagnosticReports = () => {
           </Button>
           <Button variant="primary" onClick={() => {
             fetchDiagnostics(filters, pagination.limit, pagination.offset);
-            fetchStats(); // Also refresh stats on manual refresh
+            fetchStats(undefined, undefined, filters); // Also refresh stats on manual refresh
           }}>
             Refresh
           </Button>
@@ -636,6 +639,8 @@ export const DiagnosticReports = () => {
               setFilters(newFilters);
               fetchDiagnostics(newFilters, pagination.limit, 0);
               setPagination(pagination.limit, 0);
+              // Also update stats with new filters to keep them in sync
+              fetchStats(undefined, undefined, newFilters);
             }}
             />
           </div>

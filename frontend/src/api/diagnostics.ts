@@ -47,11 +47,15 @@ export const getDiagnostic = async (alarmId: string): Promise<ApiResponse<Diagno
  */
 export const getDiagnosticStats = async (
   startTime?: string,
-  endTime?: string
+  endTime?: string,
+  filters?: DiagnosticFilters
 ): Promise<ApiResponse<DiagnosticStats>> => {
   const params = new URLSearchParams();
   if (startTime) params.append('start_time', startTime);
   if (endTime) params.append('end_time', endTime);
+  if (filters?.site_id) params.append('site_id', filters.site_id);
+  if (filters?.risk_level) params.append('risk_level', filters.risk_level);
+  if (filters?.device_type) params.append('device_type', filters.device_type);
 
   return apiRequest<DiagnosticStats>({
     method: 'GET',

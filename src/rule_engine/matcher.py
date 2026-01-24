@@ -3,12 +3,15 @@ Rule matcher for matching rules against device data
 Supports flexible matching for all device types
 """
 
+import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, UTC
 
 from ..models.device_data import DeviceData, DeviceType
 from ..models.alarm import Alarm, AlarmSeverity, AlarmLevel
 from .conditions import ConditionEvaluator
+
+logger = logging.getLogger(__name__)
 
 
 class RuleMatcher:
@@ -41,6 +44,7 @@ class RuleMatcher:
         applicable_rules = self._get_applicable_rules(device_data.device_type)
 
         for rule in applicable_rules:
+            rule_id = rule.get('id', 'UNKNOWN')
             if self._is_rule_applicable(rule, device_data):
                 if self._evaluate_rule(rule, device_data, history):
                     matched_rules.append({
@@ -48,6 +52,29 @@ class RuleMatcher:
                         "device_data": device_data,
                         "matched_at": datetime.now(UTC),
                     })
+                    logger.debug(
+                        f"[RuleMatcher] Rule {rule_id} matched for device {device_data.device_id} "
+                        f"(type: {device_data.device_type.value}, site: {device_data.site_id})"
+                    )
+                else:
+                    # Log why rule didn't match (condition evaluation failed)
+                    condition = rule.get("condition", {})
+                    field_path = condition.get("field")
+                    if field_path:
+                        field_value = device_data.get_field(field_path)
+                        logger.debug(
+                            f"[RuleMatcher] Rule {rule_id} condition not met: "
+                            f"{field_path}={field_value}, condition: {condition}"
+                        )
+            else:
+                # Log why rule is not applicable
+                rule_device_ids = rule.get("device_ids", [])
+                rule_device_types = rule.get("device_types", [])
+                logger.debug(
+                    f"[RuleMatcher] Rule {rule_id} not applicable: "
+                    f"device_id={device_data.device_id} (rule requires: {rule_device_ids}), "
+                    f"device_type={device_data.device_type.value} (rule requires: {rule_device_types})"
+                )
 
         # Sort by priority (higher priority first)
         matched_rules.sort(key=lambda x: x["rule"].get("priority", 0), reverse=True)
@@ -159,8 +186,55 @@ class RuleMatcher:
         except ValueError:
             severity = AlarmSeverity.WARNING
 
-        # Generate alarm ID
-        alarm_id = f"{rule.get('id', 'UNKNOWN')}_{device_data.device_id}_{int(device_data.timestamp.timestamp())}"
+        # Generate alarm ID with consistent format
+        # Format: RULE_{BASE_RULE_ID}_{DEVICE_ID}_{TIMESTAMP}
+        # Example: RULE_BMS_001_BMS_001_1769297380
+        # 
+        # Logic:
+        # 1. Extract base rule ID (remove device_id suffix if present)
+        # 2. Ensure RULE_ prefix exists
+        # 3. Always append device_id and timestamp
+        
+        original_rule_id = rule.get('id', 'UNKNOWN')
+        device_id = device_data.device_id
+        timestamp = int(device_data.timestamp.timestamp())
+        
+        # Step 1: Validate and normalize rule_id
+        if not original_rule_id or original_rule_id == 'UNKNOWN':
+            logger.warning(f"Invalid rule_id: {original_rule_id}, using fallback")
+            base_rule_id = 'RULE_UNKNOWN'
+        else:
+            # Step 2: Extract base rule ID (remove device_id suffix if present)
+            # Handle cases like:
+            # - "RULE_BMS_001_BMS_001" -> "RULE_BMS_001"
+            # - "RULE_BMS_001" -> "RULE_BMS_001"
+            # - "BMS_001" -> "RULE_BMS_001"
+            temp_rule_id = original_rule_id
+            
+            # Remove device_id suffix if present
+            if temp_rule_id.endswith(f"_{device_id}"):
+                # Extract base: remove the last part (device_id)
+                parts = temp_rule_id.split("_")
+                if len(parts) > 1:
+                    temp_rule_id = "_".join(parts[:-1])
+                    logger.debug(f"Extracted base rule ID: {original_rule_id} -> {temp_rule_id}")
+            
+            # Step 3: Ensure RULE_ prefix exists
+            if not temp_rule_id.startswith('RULE_'):
+                base_rule_id = f"RULE_{temp_rule_id}"
+                logger.debug(f"Added RULE_ prefix: {temp_rule_id} -> {base_rule_id}")
+            else:
+                base_rule_id = temp_rule_id
+        
+        # Step 4: Generate alarm ID: RULE_{BASE_RULE_ID}_{DEVICE_ID}_{TIMESTAMP}
+        alarm_id = f"{base_rule_id}_{device_id}_{timestamp}"
+        
+        # Log for debugging
+        logger.info(
+            f"Generated alarm_id: {alarm_id} "
+            f"(original_rule_id: {original_rule_id}, base_rule_id: {base_rule_id}, "
+            f"device_id: {device_id}, timestamp: {timestamp})"
+        )
 
         # Build metadata
         metadata = {

@@ -778,13 +778,15 @@ class InfluxDBMetadataStorage:
             logger.error(f"Failed to get all devices from InfluxDB: {e}", exc_info=True)
             return []
 
-    def delete_device(self, device_id: str) -> bool:
+    def delete_device(self, device_id: str, site_id: Optional[str] = None) -> bool:
         """
         Delete device metadata from InfluxDB
         This permanently deletes all device metadata records using delete API
 
         Args:
             device_id: Device ID to delete
+            site_id: Optional site ID to specify which bucket to delete from.
+                    If not provided, will try to determine from device data.
 
         Returns:
             True if successful, False otherwise
@@ -798,30 +800,42 @@ class InfluxDBMetadataStorage:
             start_time = datetime.now(UTC) - timedelta(days=3650)  # 10 years ago
             stop_time = datetime.now(UTC) + timedelta(days=1)  # Tomorrow
             
-            # Delete all device metadata records for this device_id
-            # Try to find device first to determine which bucket to delete from
-            device_data = self.get_device(device_id)
-            if device_data:
-                site_id = device_data.get("site_id")
-                if site_id:
-                    bucket_name = self._get_bucket_for_site(site_id)
-                else:
-                    bucket_name = self.influx_client.bucket
+            # Determine bucket name
+            bucket_name = None
+            if site_id:
+                # Use provided site_id to determine bucket
+                bucket_name = self._get_bucket_for_site(site_id)
             else:
-                # Device not found, try default bucket
-                bucket_name = self.influx_client.bucket
+                # Try to find device first to determine which bucket to delete from
+                device_data = self.get_device(device_id)
+                if device_data:
+                    device_site_id = device_data.get("site_id")
+                    if device_site_id:
+                        bucket_name = self._get_bucket_for_site(device_site_id)
+                    else:
+                        bucket_name = self.influx_client.bucket
+                else:
+                    # Device not found, try default bucket
+                    bucket_name = self.influx_client.bucket
             
             predicate = f'_measurement="{self.devices_measurement}" AND device_id="{device_id}"'
             
-            delete_api.delete(
-                start=start_time,
-                stop=stop_time,
-                predicate=predicate,
-                bucket=bucket_name,
-                org=self.influx_client.org
-            )
+            try:
+                delete_api.delete(
+                    start=start_time,
+                    stop=stop_time,
+                    predicate=predicate,
+                    bucket=bucket_name,
+                    org=self.influx_client.org
+                )
+                logger.info(f"✓ Permanently deleted all device metadata from InfluxDB: {device_id} (bucket: {bucket_name})")
+            except Exception as delete_error:
+                error_str = str(delete_error)
+                if "not found" in error_str.lower() or "404" in error_str:
+                    logger.debug(f"Bucket {bucket_name} does not exist or device {device_id} already deleted, considering it successful.")
+                    return True
+                raise  # Re-raise other errors
 
-            logger.info(f"✓ Permanently deleted all device metadata from InfluxDB: {device_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to delete device from InfluxDB: {e}", exc_info=True)

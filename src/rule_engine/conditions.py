@@ -58,37 +58,53 @@ class ConditionEvaluator:
     @staticmethod
     def _evaluate_threshold(condition: Dict[str, Any], device_data: DeviceData) -> bool:
         """Evaluate threshold condition"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         field_path = condition.get("field")
         operator = condition.get("operator", ">")
         threshold_value = condition.get("value")
 
         if field_path is None or threshold_value is None:
+            logger.debug(f"[ConditionEvaluator] Missing field_path or threshold_value: field={field_path}, threshold={threshold_value}")
             return False
 
         field_value = device_data.get_field(field_path)
         if field_value is None:
+            logger.debug(f"[ConditionEvaluator] Field '{field_path}' not found in device data. Available fields: {list(device_data.data.keys())}")
             return False
 
         try:
             field_value = float(field_value)
             threshold_value = float(threshold_value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            logger.debug(f"[ConditionEvaluator] Cannot convert to float: field_value={field_value}, threshold={threshold_value}, error={e}")
             return False
 
+        # Evaluate condition
+        result = False
         if operator == ">":
-            return field_value > threshold_value
+            result = field_value > threshold_value
         elif operator == ">=":
-            return field_value >= threshold_value
+            result = field_value >= threshold_value
         elif operator == "<":
-            return field_value < threshold_value
+            result = field_value < threshold_value
         elif operator == "<=":
-            return field_value <= threshold_value
+            result = field_value <= threshold_value
         elif operator == "==":
-            return abs(field_value - threshold_value) < 0.0001  # Float comparison
+            result = abs(field_value - threshold_value) < 0.0001  # Float comparison
         elif operator == "!=":
-            return abs(field_value - threshold_value) >= 0.0001
+            result = abs(field_value - threshold_value) >= 0.0001
         else:
+            logger.warning(f"[ConditionEvaluator] Unknown operator: {operator}")
             return False
+        
+        logger.debug(
+            f"[ConditionEvaluator] Threshold evaluation: {field_path} {operator} {threshold_value} "
+            f"-> {field_value} {operator} {threshold_value} = {result}"
+        )
+        
+        return result
 
     @staticmethod
     def _evaluate_status(condition: Dict[str, Any], device_data: DeviceData) -> bool:

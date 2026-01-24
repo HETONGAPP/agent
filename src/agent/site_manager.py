@@ -171,19 +171,26 @@ class SiteManager:
         all_rules = []
         rule_ids_seen = set()
 
-        # Get rules from PostgreSQL (primary storage)
+        # Get rules from PostgreSQL (primary storage) - THIS IS THE SOURCE OF TRUTH
         postgres_rules = []
         if self._postgres_storage:
             try:
                 postgres_rules = self._postgres_storage.get_rules_by_site(site_id, enabled_only=False)
                 if postgres_rules:
-                    logger.debug(f"Loaded {len(postgres_rules)} rules from PostgreSQL for site {site_id}")
-                    # Add PostgreSQL rules to result
+                    logger.info(f"✓ Loaded {len(postgres_rules)} rules from PostgreSQL (database) for site {site_id} - these are the ACTUAL rules used for alarms")
+                    # Add PostgreSQL rules to result - these take priority over YAML file
                     for rule in postgres_rules:
                         rule_id = rule.get("id")
                         if rule_id and rule_id not in rule_ids_seen:
                             all_rules.append(rule)
                             rule_ids_seen.add(rule_id)
+                            # Log rule details to confirm database values are used
+                            condition = rule.get("condition", {})
+                            if condition.get("type") == "threshold":
+                                logger.debug(
+                                    f"  Rule {rule_id}: {condition.get('field')} {condition.get('operator')} {condition.get('value')} "
+                                    f"(from database, enabled={rule.get('enabled', True)})"
+                                )
             except Exception as e:
                 logger.warning(f"Failed to load rules from PostgreSQL for site {site_id}: {e}, trying InfluxDB")
 
@@ -210,14 +217,21 @@ class SiteManager:
             except Exception as e:
                 logger.warning(f"Failed to load rules from InfluxDB for site {site_id}: {e}")
 
-        # If we have rules from database, return them
+        # If we have rules from database, return them (database rules are the source of truth)
         if all_rules:
             # Cache the result
             self._site_rules_cache[site_id] = all_rules
-            logger.debug(f"Returning {len(all_rules)} merged rules for site {site_id} (PostgreSQL: {len(postgres_rules)}, InfluxDB: {len(all_rules) - len(postgres_rules)})")
+            logger.info(
+                f"✓ Using {len(all_rules)} rules from DATABASE for site {site_id} "
+                f"(PostgreSQL: {len(postgres_rules)}, InfluxDB: {len(all_rules) - len(postgres_rules)})"
+            )
             return all_rules.copy()
 
-        # Fallback to file if database has no rules
+        # Fallback to file ONLY if database has no rules (YAML is just initial values)
+        logger.warning(
+            f"No rules found in database for site {site_id}, falling back to YAML file "
+            f"(YAML file contains only initial values, update rules via frontend to save to database)"
+        )
         if not self.site_rules_dir:
             return []
 
@@ -234,7 +248,7 @@ class SiteManager:
             # Cache the result
             self._site_rules_cache[site_id] = rules
             if rules:
-                logger.debug(f"Loaded {len(rules)} rules from file for site {site_id}")
+                logger.warning(f"⚠ Using {len(rules)} rules from YAML FILE for site {site_id} (initial values only, not updated rules)")
             return rules.copy()
         except Exception as e:
             logger.error(f"Failed to load site rules from file for {site_id}: {e}", exc_info=True)
@@ -390,6 +404,22 @@ class SiteManager:
                 rule["metadata"]["alarm_type"] = alarm_type
                 logger.debug(f"Auto-generated alarm_type '{alarm_type}' from rule name '{rule_name}'")
 
+            # Find all device-specific rules that match this base rule
+            # e.g., if updating RULE_BMS_006, also update RULE_BMS_006_BMS_001, RULE_BMS_006_BMS_002, etc.
+            device_specific_rule_ids = []
+            if self._postgres_storage:
+                try:
+                    all_site_rules = self._postgres_storage.get_rules_by_site(site_id, enabled_only=False)
+                    for existing_rule in all_site_rules:
+                        existing_rule_id = existing_rule.get("id", "")
+                        # Check if this is a device-specific rule that matches the base rule
+                        # Pattern: RULE_BMS_006_BMS_001 should match base RULE_BMS_006
+                        if existing_rule_id and existing_rule_id.startswith(f"{rule_id}_"):
+                            device_specific_rule_ids.append(existing_rule_id)
+                            logger.debug(f"Found device-specific rule {existing_rule_id} matching base rule {rule_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to find device-specific rules for {rule_id} in site {site_id}: {e}")
+
             # Try to update in PostgreSQL first (primary storage)
             rule_found = False
             if self._postgres_storage:
@@ -407,6 +437,30 @@ class SiteManager:
                 except Exception as e:
                     logger.warning(f"Failed to update rule in PostgreSQL for site {site_id}: {e}")
 
+            # Update all device-specific rules that match this base rule
+            device_specific_updated = 0
+            if device_specific_rule_ids and self._postgres_storage:
+                for device_rule_id in device_specific_rule_ids:
+                    try:
+                        # Create a copy of the rule with the device-specific ID
+                        device_rule = rule.copy()
+                        device_rule["id"] = device_rule_id
+                        # Preserve device_ids from existing rule
+                        existing_device_rule = self._postgres_storage.get_rule(site_id, device_rule_id)
+                        if existing_device_rule and existing_device_rule.get("device_ids"):
+                            device_rule["device_ids"] = existing_device_rule["device_ids"]
+                        
+                        if self._postgres_storage.save_rule(site_id, device_rule):
+                            device_specific_updated += 1
+                            logger.info(f"Updated device-specific rule {device_rule_id} for site {site_id}")
+                        else:
+                            logger.warning(f"Failed to update device-specific rule {device_rule_id} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to update device-specific rule {device_rule_id}: {e}")
+            
+            if device_specific_updated > 0:
+                logger.info(f"Updated {device_specific_updated} device-specific rules matching base rule {rule_id}")
+
             # Also update in InfluxDB container (secondary storage)
             if self._container_manager:
                 try:
@@ -414,6 +468,21 @@ class SiteManager:
                     if container:
                         container.write_rule(rule, flush=True)
                         logger.debug(f"Updated rule {rule_id} in InfluxDB container for site {site_id}")
+                        
+                        # Also update device-specific rules in container
+                        for device_rule_id in device_specific_rule_ids:
+                            try:
+                                device_rule = rule.copy()
+                                device_rule["id"] = device_rule_id
+                                # Get device_ids from existing rule if available
+                                if self._postgres_storage:
+                                    existing_device_rule = self._postgres_storage.get_rule(site_id, device_rule_id)
+                                    if existing_device_rule and existing_device_rule.get("device_ids"):
+                                        device_rule["device_ids"] = existing_device_rule["device_ids"]
+                                container.write_rule(device_rule, flush=True)
+                                logger.debug(f"Updated device-specific rule {device_rule_id} in InfluxDB container")
+                            except Exception as e:
+                                logger.warning(f"Failed to update device-specific rule {device_rule_id} in container: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to update rule in InfluxDB container for site {site_id}: {e}")
 
@@ -921,7 +990,32 @@ class SiteManager:
                     # Generate unique rule ID for this device
                     original_id = device_rule.get("id", "")
                     if original_id:
-                        device_rule["id"] = f"{original_id}_{device_id}"
+                        # Check if the rule ID already ends with the device_id to avoid duplicate concatenation
+                        # e.g., if original_id is "RULE_BMS_001_BMS_001" and device_id is "BMS_001", 
+                        # we should not append again
+                        if original_id.endswith(f"_{device_id}"):
+                            # Rule ID already contains device_id, use it as is
+                            device_rule["id"] = original_id
+                        else:
+                            # Extract base rule ID if it already contains a device_id suffix from a previous run
+                            # Pattern: RULE_{TYPE}_{NUM}_{DEVICE_ID} -> RULE_{TYPE}_{NUM}
+                            # e.g., "RULE_BMS_001_BMS_001" -> "RULE_BMS_001"
+                            parts = original_id.split("_")
+                            # Check if last part matches device_id and second-to-last part matches device_type prefix
+                            if len(parts) >= 4:
+                                last_part = parts[-1]
+                                # Check if last part is a device_id (could be BMS_001, PCS_001, etc.)
+                                # If it matches the current device_id, extract base
+                                if last_part == device_id:
+                                    # Extract base: remove the last part (device_id)
+                                    base_id = "_".join(parts[:-1])
+                                    device_rule["id"] = f"{base_id}_{device_id}"
+                                else:
+                                    # Normal case: append device_id to original rule ID
+                                    device_rule["id"] = f"{original_id}_{device_id}"
+                            else:
+                                # Normal case: append device_id to original rule ID
+                                device_rule["id"] = f"{original_id}_{device_id}"
                     applicable_rules.append(device_rule)
             
             if not applicable_rules:

@@ -103,11 +103,8 @@ class AgentService:
         self._dedup_cleanup_interval: float = 60.0  # Cleanup old keys every 60 seconds
         self._last_cleanup: float = time.time()
         
-        # Active alarms cache: Track active alarms to prevent duplicates
-        # Key: f"{rule_id}:{device_id}", Value: (alarm_id, timestamp)
-        self._active_alarms: Dict[str, tuple[str, datetime]] = {}
-        self._alarm_dedup_window: float = 60.0  # 60 seconds: if same alarm persists within window, skip creating new
-        # Note: We also check database for existing alarms to handle service restarts
+        # Removed alarm cache and deduplication logic - alarms are now written directly to InfluxDB
+        # No caching to avoid stale data issues
         
         # Periodic flush task for InfluxDB buffer (prevent data loss)
         self._flush_task: Optional[asyncio.Task] = None
@@ -138,73 +135,7 @@ class AgentService:
         for key in keys_to_remove:
             self._processed_keys.pop(key, None)
     
-    def _check_recent_alarm_in_db(
-        self,
-        site_id: str,
-        rule_id: str,
-        device_id: str,
-        alarm_type: str,
-        within_seconds: float = 60.0
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Check if a recent alarm exists in database for the same rule and device
-        
-        Args:
-            site_id: Site ID
-            rule_id: Rule ID
-            device_id: Device ID
-            alarm_type: Alarm type
-            within_seconds: Time window in seconds to check
-            
-        Returns:
-            Recent alarm dict if found, None otherwise
-        """
-        try:
-            # Use container manager if available (preferred)
-            if self.use_containers and self.container_manager:
-                container = self.container_manager.get_container(site_id, auto_create=False)
-                if container:
-                    # Query alarms from the last 'within_seconds' seconds
-                    from datetime import timedelta
-                    start_time = (datetime.now(UTC) - timedelta(seconds=within_seconds)).isoformat()
-                    alarms = container.query_alarms(
-                        start_time=start_time,
-                        device_ids=[device_id],
-                        alarm_type=alarm_type,
-                        limit=10,
-                        deduplicate=False
-                    )
-                    
-                    # Find alarm with matching rule_id
-                    for alarm in alarms:
-                        alarm_rule_id = alarm.get("metadata", {}).get("rule_id") if isinstance(alarm.get("metadata"), dict) else None
-                        if alarm_rule_id == rule_id:
-                            return alarm
-                    return None
-            
-            # Fallback to direct influx_client
-            if self.influx_client:
-                from datetime import timedelta
-                start_time = (datetime.now(UTC) - timedelta(seconds=within_seconds)).isoformat()
-                alarms = self.influx_client.query_alarms(
-                    start_time=start_time,
-                    site_id=site_id,
-                    device_type=None,  # Don't filter by device_type, use device_id instead
-                    alarm_type=alarm_type,
-                    limit=10
-                )
-                
-                # Filter by device_id and rule_id
-                for alarm in alarms:
-                    alarm_device_id = alarm.get("device_id") or alarm.get("metadata", {}).get("device_id") if isinstance(alarm.get("metadata"), dict) else None
-                    alarm_rule_id = alarm.get("metadata", {}).get("rule_id") if isinstance(alarm.get("metadata"), dict) else None
-                    if alarm_device_id == device_id and alarm_rule_id == rule_id:
-                        return alarm
-            
-            return None
-        except Exception as e:
-            logger.debug(f"Error checking recent alarm in database: {e}")
-            return None
+    # Removed _check_recent_alarm_in_db - no longer needed without deduplication
 
     def _generate_dedup_key(self, device_data: DeviceData) -> str:
         """
@@ -751,100 +682,29 @@ class AgentService:
                     data_id=device_data.device_id,
                 )
 
-            # Evaluate rules
+            # Evaluate rules - generate alarms directly without caching or deduplication
             alarms = self.rule_engine.evaluate(device_data, history)
             logger.info(
                 f"[AgentService] Rule evaluation for {device_data.device_id} (site: {device_data.site_id}): "
-                f"Generated {len(alarms)} alarms before deduplication"
+                f"Generated {len(alarms)} alarms"
             )
             
-            # Deduplicate alarms: Check if same alarm already exists
-            # Strategy:
-            # 1. Check memory cache first (fast)
-            # 2. If not in cache, check database for recent alarms (handles service restarts)
-            # 3. If alarm exists within dedup window, skip creating new alarm
-            deduplicated_alarms = []
-            current_time = datetime.now(UTC)
-            
-            for alarm in alarms:
-                # Generate deduplication key: rule_id + device_id
-                rule_id = alarm.metadata.get("rule_id", "UNKNOWN")
-                device_id = alarm.metadata.get("device_id", device_data.device_id)
-                alarm_type = alarm.alarm_type
-                dedup_key = f"{rule_id}:{device_id}"
-                
-                # Step 1: Check memory cache first
-                should_skip = False
-                if dedup_key in self._active_alarms:
-                    existing_alarm_id, existing_timestamp = self._active_alarms[dedup_key]
-                    time_since_existing = (current_time - existing_timestamp).total_seconds()
-                    
-                    if time_since_existing < self._alarm_dedup_window:
-                        logger.debug(
-                            f"[AgentService] Skipping duplicate alarm (cache): {alarm_type} for device {device_id} "
-                            f"(rule_id: {rule_id}, existing alarm {existing_alarm_id} from {time_since_existing:.1f}s ago)"
-                        )
-                        should_skip = True
-                    else:
-                        # Alarm exists but is old, remove from cache
-                        logger.debug(f"Removing old alarm from cache: {dedup_key} (age: {time_since_existing:.1f}s)")
-                        self._active_alarms.pop(dedup_key, None)
-                
-                # Step 2: If not in cache, check database for recent alarms (within dedup window)
-                if not should_skip and device_data.site_id:
+            # Process all alarms immediately - no caching, no deduplication
+            # Each alarm is written directly to InfluxDB with unique timestamp
+            if alarms:
+                logger.info(f"[AgentService] Processing {len(alarms)} alarms for device {device_data.device_id}")
+                for alarm in alarms:
                     try:
-                        # Query database for recent alarms with same rule_id and device_id
-                        recent_alarm = self._check_recent_alarm_in_db(
-                            site_id=device_data.site_id,
-                            rule_id=rule_id,
-                            device_id=device_id,
-                            alarm_type=alarm_type,
-                            within_seconds=self._alarm_dedup_window
-                        )
-                        
-                        if recent_alarm:
-                            logger.debug(
-                                f"[AgentService] Skipping duplicate alarm (database): {alarm_type} for device {device_id} "
-                                f"(rule_id: {rule_id}, found recent alarm {recent_alarm.get('alarm_id')} in database)"
-                            )
-                            # Update cache with database alarm info
-                            self._active_alarms[dedup_key] = (
-                                recent_alarm.get('alarm_id', alarm.alarm_id),
-                                current_time
-                            )
-                            should_skip = True
+                        await self._process_alarm(alarm, device_data)
                     except Exception as e:
-                        logger.warning(f"Failed to check database for duplicate alarm: {e}")
-                        # Continue processing if database check fails
-                
-                if should_skip:
-                    continue
-                
-                # Add to active alarms cache and process
-                self._active_alarms[dedup_key] = (alarm.alarm_id, current_time)
-                logger.info(
-                    f"[AgentService] Processing new alarm: {alarm.alarm_id} "
-                    f"(rule_id: {rule_id}, alarm_type: {alarm_type}, device_id: {device_id})"
-                )
-                deduplicated_alarms.append(alarm)
-            
-            # Clean up old active alarms from cache (older than dedup window)
-            keys_to_remove = []
-            for key, (_, timestamp) in self._active_alarms.items():
-                age = (current_time - timestamp).total_seconds()
-                if age > self._alarm_dedup_window:
-                    keys_to_remove.append(key)
-            for key in keys_to_remove:
-                self._active_alarms.pop(key, None)
-            
-            alarms = deduplicated_alarms
+                        logger.error(f"Failed to process alarm {alarm.alarm_id}: {e}", exc_info=True)
             
             # Track rule evaluation result
             if self.flow_tracker:
                 self.flow_tracker.track(
                     stage="rule_evaluation_complete",
                     data_id=device_data.device_id,
-                    metadata={"alarms_count": len(alarms), "deduplicated": True},
+                    metadata={"alarms_count": len(alarms)},
                     status="success" if alarms else "no_alarms",
                 )
 
@@ -1077,7 +937,7 @@ class AgentService:
                 if self.use_containers and self.container_manager and site_id:
                     try:
                         container = self.container_manager.get_container(site_id, auto_create=True)
-                        container.write_alarm(alarm, flush=False)
+                        container.write_alarm(alarm, flush=True)  # Flush immediately for real-time alarms
                         if result["diagnostic"]:
                             # Store diagnostic metadata
                             diagnostic_dict = result["diagnostic"].copy()
@@ -1105,7 +965,7 @@ class AgentService:
                                 await asyncio.sleep(retry_delay)
                                 logger.info(f"Retrying alarm storage to container (attempt {retry + 2}/{max_retries + 1})")
                                 container = self.container_manager.get_container(site_id, auto_create=True)
-                                container.write_alarm(alarm, flush=False)
+                                container.write_alarm(alarm, flush=True)  # Flush immediately for real-time alarms
                                 if result["diagnostic"]:
                                     diagnostic_dict = result["diagnostic"].copy()
                                     if "metadata" not in diagnostic_dict:
@@ -1128,7 +988,7 @@ class AgentService:
                                     result["storage_error"] = f"Failed after {max_retries + 1} attempts: {str(retry_error)}"
                 elif self.influx_client:
                     # Fallback to direct influx_client (legacy mode)
-                    self.influx_client.write_alarm(alarm, flush=False, site_id=site_id)
+                    self.influx_client.write_alarm(alarm, flush=True, site_id=site_id)  # Flush immediately for real-time alarms
                     if result["diagnostic"]:
                         # Store diagnostic metadata
                         diagnostic_dict = result["diagnostic"].copy()
@@ -1164,7 +1024,7 @@ class AgentService:
                         if self.use_containers and self.container_manager and site_id:
                             container = self.container_manager.get_container(site_id, auto_create=True)
                             if container:
-                                container.write_alarm(alarm, flush=False)
+                                container.write_alarm(alarm, flush=True)  # Flush immediately for real-time alarms
                                 if result["diagnostic"]:
                                     container.write_diagnostic(alarm.alarm_id, result["diagnostic"])
                                 result["stored"] = True
@@ -1172,7 +1032,7 @@ class AgentService:
                                 logger.info(f"✓ Alarm storage succeeded on retry {retry + 2}")
                                 break
                         elif self.influx_client:
-                            self.influx_client.write_alarm(alarm, flush=False, site_id=site_id)
+                            self.influx_client.write_alarm(alarm, flush=True, site_id=site_id)  # Flush immediately for real-time alarms
                             if result["diagnostic"]:
                                 diagnostic_dict = result["diagnostic"].copy()
                                 if "metadata" not in diagnostic_dict:
@@ -1215,18 +1075,8 @@ class AgentService:
         except Exception as e:
             logger.debug(f"Error publishing alarm event: {e}")
         
-        # Invalidate query cache for alarms
-        try:
-            from ..agent.dependencies import get_app_state
-            app_state = get_app_state()
-            query_cache = app_state.get("query_cache")
-            if query_cache:
-                # Invalidate alarms and stats cache
-                query_cache.invalidate("alarms")
-                query_cache.invalidate("alarm_stats")
-                logger.debug("Invalidated alarm query cache after new alarm creation")
-        except Exception as e:
-            logger.debug(f"Error invalidating cache: {e}")
+        # No cache invalidation needed - alarms are always queried fresh from database
+        # Removed cache invalidation logic
         
         # Send email if service available
         if self.email_service and result["diagnostic"]:
@@ -1335,18 +1185,20 @@ class AgentService:
                 stats = await self._get_quick_stats(site_id=site_id)
                 
                 # Broadcast alarm_created event with full alarm data and stats
+                # Include site_id at top level for easier frontend access
                 await websocket_manager.broadcast(
                     EventType.ALARM_CREATED,
                     {
                         "alarm": {
                             "alarm_id": alarm.alarm_id,
                             "alarm_type": alarm.alarm_type,
-                            "device_id": alarm.device_id,
+                            "device_id": alarm.metadata.get("device_id") if alarm.metadata else None,
                             "severity": alarm.severity.value,
-                            "message": alarm.message,
+                            "message": alarm.metadata.get("rule_name", alarm.alarm_type) if alarm.metadata else alarm.alarm_type,
                             "timestamp": alarm.timestamp.isoformat() if hasattr(alarm.timestamp, 'isoformat') else str(alarm.timestamp),
                             "site_id": site_id,
                         },
+                        "site_id": site_id,  # Also include at top level for easier access
                         "diagnostic": result.get("diagnostic"),
                         "stats": stats,  # Include stats to avoid frontend HTTP request
                     },

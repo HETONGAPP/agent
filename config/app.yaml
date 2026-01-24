@@ -188,7 +188,7 @@ webhook:
 
 # Rule engine configuration
 rule_engine:
-  rules_file: config/rules.yaml
+  rules_file: config/rules_universal.yaml
   site_rules_dir: config/sites  # Directory for site-specific rules
   enable_multi_site: ${ENABLE_MULTI_SITE:-false}  # Enable multi-site support
   cache_enabled: true

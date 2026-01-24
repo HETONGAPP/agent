@@ -217,11 +217,17 @@ def register_site_rules_routes(app):
                     },
                 )
             
+            # Clear cache in SiteManager
+            if site_id in site_manager._site_rules_cache:
+                del site_manager._site_rules_cache[site_id]
+                logger.debug(f"Cleared rule cache for site {site_id} in SiteManager")
+            
             # Reload rules in rule engine if multi-site is enabled
             app_state = get_app_state()
             rule_engine = app_state.get("rule_engine")
             if rule_engine and hasattr(rule_engine, "site_rule_manager"):
                 rule_engine.site_rule_manager.reload_site_rules(site_id)
+                logger.debug(f"Reloaded rules for site {site_id} in RuleEngine")
             
             # Invalidate alarm cache to ensure fresh data
             if query_cache:
@@ -325,11 +331,26 @@ def register_site_rules_routes(app):
                     },
                 )
             
-            # Reload rules in rule engine if multi-site is enabled
+            # Clear ALL caches to ensure updated rule is loaded
+            # 1. Clear SiteManager cache
+            if site_id in site_manager._site_rules_cache:
+                del site_manager._site_rules_cache[site_id]
+                logger.info(f"✓ Cleared SiteManager rule cache for site {site_id}")
+            
+            # 2. Reload rules in rule engine if multi-site is enabled
             app_state = get_app_state()
             rule_engine = app_state.get("rule_engine")
             if rule_engine and hasattr(rule_engine, "site_rule_manager"):
                 rule_engine.site_rule_manager.reload_site_rules(site_id)
+                logger.info(f"✓ Reloaded rules for site {site_id} in RuleEngine (cache cleared)")
+            
+            # 3. Log rule update details for debugging
+            condition = rule_data.get("condition", {})
+            threshold = condition.get("value")
+            logger.info(
+                f"✓ Rule {rule_id} updated for site {site_id}: "
+                f"condition={condition.get('field')} {condition.get('operator')} {threshold}"
+            )
             
             # Invalidate alarm cache to ensure fresh data
             if query_cache:
@@ -408,11 +429,17 @@ def register_site_rules_routes(app):
                     },
                 )
             
+            # Clear cache in SiteManager
+            if site_id in site_manager._site_rules_cache:
+                del site_manager._site_rules_cache[site_id]
+                logger.debug(f"Cleared rule cache for site {site_id} in SiteManager")
+            
             # Reload rules in rule engine if multi-site is enabled
             app_state = get_app_state()
             rule_engine = app_state.get("rule_engine")
             if rule_engine and hasattr(rule_engine, "site_rule_manager"):
                 rule_engine.site_rule_manager.reload_site_rules(site_id)
+                logger.debug(f"Reloaded rules for site {site_id} in RuleEngine")
             
             # Invalidate alarm cache to ensure fresh data
             if query_cache:

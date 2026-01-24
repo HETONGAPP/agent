@@ -77,7 +77,7 @@ def register_metrics_routes(app):
         metric: Optional[str] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        interval: str = "5m",
+        interval: str = "1m",
         since: Optional[str] = None,
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),

@@ -66,14 +66,15 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
     if (!connected) return;
 
     const unsubscribe = websocketEventManager.subscribe((event) => {
-      const eventSiteId = event.data?.site_id;
+      const eventSiteId = event.data?.site_id || event.data?.alarm?.site_id;
       const isRuleUpdate = event.data?.reason === 'rule_updated' || event.data?.reason === 'rule_added' || event.data?.reason === 'rule_deleted';
       
       if (event.type === EventType.ALARM_CREATED || event.type === EventType.ALARM_UPDATED) {
-        // Refresh alarms if they belong to this site or if it's a rule update for this site
-        const alarm = event.data;
-        const alarmSiteId = alarm?.site_id;
+        // Extract alarm data - it might be directly in event.data or in event.data.alarm
+        const alarm = event.data?.alarm || event.data;
+        const alarmSiteId = alarm?.site_id || eventSiteId;
         
+        // Refresh alarms if they belong to this site or if it's a rule update for this site
         if (alarmSiteId === siteId || (isRuleUpdate && eventSiteId === siteId)) {
           // When querying a specific site, don't use aggregate_by_site (we want all alarms)
           fetchAlarms(filters, 15, pagination.offset, false);
@@ -83,8 +84,11 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
         // Refresh stats and alarms if the update is for this site
         if (!eventSiteId || eventSiteId === siteId) {
           fetchStats();
-          // Also refresh alarms if it's a rule-related update for this site
+          // Also refresh alarms if it's a rule-related update for this site or if it's an alarm_created reason
           if (isRuleUpdate && eventSiteId === siteId) {
+            fetchAlarms(filters, 15, pagination.offset, false);
+          } else if (event.data?.reason === 'alarm_created' && eventSiteId === siteId) {
+            // Also refresh alarms when a new alarm is created (even if it's via STATS_UPDATED event)
             fetchAlarms(filters, 15, pagination.offset, false);
           }
         }

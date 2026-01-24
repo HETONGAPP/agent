@@ -140,6 +140,17 @@ class RuleEngine:
                 f"(device: {device_data.device_id}, type: {device_data.device_type.value})"
             )
             
+            # Log SOC high rule details for debugging
+            for rule in site_rules:
+                if 'soc' in rule.get('name', '').lower() and 'high' in rule.get('name', '').lower():
+                    condition = rule.get('condition', {})
+                    threshold = condition.get('value')
+                    logger.info(
+                        f"[RuleEngine] SOC High rule found: {rule.get('id')}, "
+                        f"threshold={threshold}, enabled={rule.get('enabled', True)}, "
+                        f"device_ids={rule.get('device_ids', [])}"
+                    )
+            
             # Apply site-specific thresholds
             site_rules = [
                 self.site_rule_manager.apply_site_thresholds(rule, device_data.site_id)

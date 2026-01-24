@@ -15,7 +15,6 @@ from ...agent.dependencies import (
     get_influx_client,
     get_agent_service,
     get_site_manager,
-    get_query_cache,
     get_postgres_metadata_storage,
 )
 from ...agent.rate_limiter import rate_limit_dependency
@@ -129,7 +128,6 @@ def register_alarm_routes(app):
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
         site_manager: Optional[SiteManager] = Depends(get_site_manager),
-        query_cache = Depends(get_query_cache),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
         """
@@ -146,30 +144,7 @@ def register_alarm_routes(app):
             )
         
         try:
-            # Try to get from cache
-            cache_params = {
-                "device_id": device_id,
-                "device_type": device_type,
-                "alarm_type": alarm_type,
-                "severity": severity,
-                "site_id": site_id,
-                "start_time": start_time,
-                "end_time": end_time,
-                "limit": limit,
-                "offset": offset,
-                "aggregate_by_site": aggregate_by_site,
-            }
-            
-            if query_cache:
-                cached_result = query_cache.get("alarms", cache_params)
-                if cached_result:
-                    logger.debug(f"Cache hit for alarms query: {cache_params}")
-                    return {
-                        "status": "success",
-                        "data": cached_result,
-                    }
-            
-            # Cache miss, query database
+            # Query database directly - no caching to ensure fresh data
             alarms = []
             total_count = 0
             
@@ -397,10 +372,7 @@ def register_alarm_routes(app):
                 "offset": offset,
             }
             
-            # Cache the result
-            cache_ttl = 60 if aggregate_by_site else 30
-            if query_cache:
-                query_cache.set("alarms", cache_params, result, ttl=cache_ttl)
+            # No caching - always return fresh data from database
             
             return {
                 "status": "success",
@@ -419,7 +391,6 @@ def register_alarm_routes(app):
         end_time: Optional[str] = None,
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
-        query_cache = Depends(get_query_cache),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
         """Get alarm statistics"""
@@ -438,14 +409,7 @@ def register_alarm_routes(app):
                 "end_time": end_time,
             }
             
-            if query_cache:
-                cached_result = query_cache.get("alarm_stats", cache_params)
-                if cached_result:
-                    logger.debug(f"Cache hit for alarm stats: {cache_params}")
-                    return {
-                        "status": "success",
-                        "data": cached_result,
-                    }
+            # No caching - query database directly
             
             # Query alarms
             alarms = []
@@ -507,8 +471,7 @@ def register_alarm_routes(app):
                 "by_source": source_counts,
             }
             
-            if query_cache:
-                query_cache.set("alarm_stats", cache_params, result, ttl=60)
+            # No caching - always return fresh data from database
             
             return {
                 "status": "success",

@@ -381,14 +381,23 @@ def register_site_routes(app):
                 try:
                     devices_deleted = 0
                     for device_id in device_ids_to_delete:
-                        # Delete device metadata from main bucket
-                        if site_manager._influx_storage.delete_device(device_id):
+                        # Pass site_id to delete_device to ensure correct bucket is targeted
+                        if site_manager._influx_storage.delete_device(device_id, site_id=site_id):
                             devices_deleted += 1
                             logger.debug(f"Deleted device metadata for {device_id}")
                     if devices_deleted > 0:
                         logger.info(f"✓ Deleted {devices_deleted} device metadata records from main bucket")
                 except Exception as e:
                     logger.error(f"Failed to delete device metadata from main bucket: {e}", exc_info=True)
+            
+            # Delete all diagnostic reports for this site from PostgreSQL
+            if site_manager._postgres_storage:
+                try:
+                    diagnostics_deleted = site_manager._postgres_storage.delete_diagnostics_by_site(site_id)
+                    if diagnostics_deleted > 0:
+                        logger.info(f"✓ Deleted {diagnostics_deleted} diagnostic report(s) from PostgreSQL for site {site_id}")
+                except Exception as e:
+                    logger.error(f"Failed to delete diagnostic reports from PostgreSQL for site {site_id}: {e}", exc_info=True)
             
             success = site_manager.delete_site(site_id)
             if not success:

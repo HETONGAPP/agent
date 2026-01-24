@@ -1041,7 +1041,7 @@ class InfluxDBClient:
         metric: Optional[str] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        interval: str = "5m",  # "5m", "1h", "1d", etc.
+        interval: str = "1m",  # "1m", "5m", "1h", "1d", etc.
         limit: int = 1000,
     ) -> List[Dict[str, Any]]:
         """

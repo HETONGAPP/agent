@@ -78,14 +78,17 @@ class SiteRuleManager:
         
         # If site_manager is not available, fallback to file
         if not self.site_rules_dir or not self.site_rules_dir.exists():
+            logger.debug(f"[SiteRuleManager] No site_manager and no site_rules_dir for site {site_id}")
             return []
 
         site_rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
         if not site_rules_file.exists():
-            logger.debug(f"No site-specific rules found for {site_id}")
+            logger.debug(f"[SiteRuleManager] No site-specific rules file found for {site_id}")
             return []
 
-        return self._load_rules_file(site_rules_file)
+        rules = self._load_rules_file(site_rules_file)
+        logger.info(f"[SiteRuleManager] Loaded {len(rules)} rules for site {site_id} from file")
+        return rules
 
     def _load_site_config(self, site_id: str) -> Dict[str, Any]:
         """Load site configuration (thresholds, etc.)"""
@@ -170,14 +173,14 @@ class SiteRuleManager:
         Merge site-specific rules with base rules
         Priority: site-specific rules take precedence over base rules
         If rule IDs overlap, site rules override base rules with the same ID
-        If fields overlap but rule IDs are different, both rules are kept (site rules first)
+        Also check for device-specific rule IDs (e.g., RULE_BMS_006_BMS_001 vs RULE_BMS_006)
         
         Args:
             site_rules: Site-specific rules (checked first, take precedence)
             base_rules: Base/global rules (checked second)
             
         Returns:
-            Merged rules list: site-specific rules first, then base rules
+            Merged rules list: site-specific rules first, then filtered base rules
         """
         # Create a map of site rules by ID for quick lookup
         site_rules_by_id = {rule.get("id"): rule for rule in site_rules if rule.get("id")}
@@ -185,19 +188,44 @@ class SiteRuleManager:
         # Track which rule IDs exist in site rules
         site_rule_ids = set(site_rules_by_id.keys())
         
-        # Filter base rules: exclude rules with IDs that exist in site rules
-        # This allows site rules to override base rules with the same ID
-        # But keep base rules with different IDs even if they use the same field
+        # Also track base rule IDs that match device-specific site rules
+        # e.g., if site has RULE_BMS_006_BMS_001, we should skip base RULE_BMS_006
+        base_rule_ids_to_skip = set()
+        for site_rule_id in site_rule_ids:
+            # Check if site rule ID is device-specific (contains device ID suffix)
+            # Pattern: RULE_{TYPE}_{NUM}_{DEVICE_ID}
+            parts = site_rule_id.split("_")
+            if len(parts) >= 4:  # At least RULE_TYPE_NUM_DEVICE
+                # Extract base rule ID (e.g., RULE_BMS_006 from RULE_BMS_006_BMS_001)
+                base_rule_id = "_".join(parts[:3])  # RULE_TYPE_NUM
+                base_rule_ids_to_skip.add(base_rule_id)
+                logger.debug(
+                    f"Site rule {site_rule_id} is device-specific, will skip base rule {base_rule_id}"
+                )
+        
+        # Filter base rules: exclude rules with IDs that exist in site rules or match device-specific patterns
         filtered_base_rules = []
         for base_rule in base_rules:
             base_rule_id = base_rule.get("id")
-            if base_rule_id and base_rule_id in site_rule_ids:
-                # Rule ID overlaps with site rule - skip this base rule (site rule takes precedence)
+            if not base_rule_id:
+                # Keep rules without IDs
+                filtered_base_rules.append(base_rule)
+                continue
+            
+            # Skip if exact ID match
+            if base_rule_id in site_rule_ids:
                 logger.debug(
-                    f"Skipping base rule {base_rule_id} "
-                    f"due to ID overlap with site rule"
+                    f"Skipping base rule {base_rule_id} due to exact ID match with site rule"
                 )
                 continue
+            
+            # Skip if base rule ID matches a device-specific site rule pattern
+            if base_rule_id in base_rule_ids_to_skip:
+                logger.debug(
+                    f"Skipping base rule {base_rule_id} due to device-specific site rule override"
+                )
+                continue
+            
             filtered_base_rules.append(base_rule)
         
         # Return: site-specific rules first, then filtered base rules
@@ -205,7 +233,7 @@ class SiteRuleManager:
         merged = site_rules.copy() + filtered_base_rules
         logger.debug(
             f"Merged {len(site_rules)} site rules with {len(filtered_base_rules)} base rules "
-            f"(total: {len(merged)} rules)"
+            f"(total: {len(merged)} rules, skipped {len(base_rules) - len(filtered_base_rules)} base rules)"
         )
         return merged
 
@@ -276,6 +304,7 @@ class SiteRuleManager:
     def reload_site_rules(self, site_id: Optional[str] = None):
         """
         Reload rules for a specific site or all sites
+        Also clears SiteManager cache to ensure fresh data is loaded from database
 
         Args:
             site_id: Site ID (None to reload all)
@@ -285,10 +314,17 @@ class SiteRuleManager:
                 del self.site_rules_cache[site_id]
             if site_id in self.site_configs:
                 del self.site_configs[site_id]
+            # Also clear SiteManager cache to ensure fresh data is loaded
+            if self.site_manager and hasattr(self.site_manager, '_site_rules_cache'):
+                if site_id in self.site_manager._site_rules_cache:
+                    del self.site_manager._site_rules_cache[site_id]
             logger.info(f"Reloaded rules for site {site_id}")
         else:
             self.site_rules_cache.clear()
             self.site_configs.clear()
+            # Also clear all SiteManager caches
+            if self.site_manager and hasattr(self.site_manager, '_site_rules_cache'):
+                self.site_manager._site_rules_cache.clear()
             self.global_rules = self._load_rules_file(self.global_rules_file)
             logger.info("Reloaded all site rules")
 

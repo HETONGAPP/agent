@@ -122,7 +122,61 @@ class SiteContainer:
                 logger.info(f"✓ Created bucket for site {self.site_id}: {self.bucket} "
                           f"(retention: {OptimizationConfig.RAW_DATA_RETENTION_DAYS} days)")
             else:
-                logger.debug(f"Bucket for site {self.site_id} already exists: {self.bucket}")
+                # Bucket already exists - this could happen if:
+                # 1. Site was deleted and recreated quickly (bucket deletion might be delayed)
+                # 2. Bucket was created manually
+                # To ensure clean state, delete and recreate the bucket
+                logger.warning(
+                    f"Bucket for site {self.site_id} already exists: {self.bucket}. "
+                    f"This might be from a previous site with the same ID. "
+                    f"Deleting and recreating bucket to ensure clean state."
+                )
+                try:
+                    # Get org ID for bucket recreation
+                    orgs_api = self.influx_client_base.client.organizations_api()
+                    orgs = orgs_api.find_organizations()
+                    org_id = None
+                    if hasattr(orgs, 'orgs'):
+                        org_list = orgs.orgs
+                    elif isinstance(orgs, list):
+                        org_list = orgs
+                    else:
+                        org_list = list(orgs) if orgs else []
+                    
+                    for org in org_list:
+                        if org.name == self.influx_client_base.org:
+                            org_id = org.id
+                            break
+                    
+                    if not org_id:
+                        org_id = self.influx_client_base.org
+                    
+                    # Find and delete the existing bucket
+                    bucket_obj = next((b for b in bucket_list if b.name == self.bucket), None)
+                    if bucket_obj:
+                        buckets_api.delete_bucket(bucket_obj)
+                        logger.info(f"✓ Deleted existing bucket for site {self.site_id}")
+                    
+                    # Recreate bucket with clean state
+                    from influxdb_client.domain.bucket import Bucket
+                    from influxdb_client.domain.bucket_retention_rules import BucketRetentionRules
+                    from ..storage.optimization_config import OptimizationConfig
+                    
+                    retention_seconds = OptimizationConfig.get_retention_seconds(
+                        OptimizationConfig.RAW_DATA_RETENTION_DAYS
+                    )
+                    retention_rules = BucketRetentionRules(type="expire", every_seconds=retention_seconds)
+                    bucket = Bucket(
+                        name=self.bucket,
+                        org_id=org_id,
+                        retention_rules=[retention_rules],
+                    )
+                    bucket = buckets_api.create_bucket(bucket=bucket)
+                    logger.info(f"✓ Recreated bucket for site {self.site_id}: {self.bucket} "
+                              f"(retention: {OptimizationConfig.RAW_DATA_RETENTION_DAYS} days)")
+                except Exception as recreate_error:
+                    logger.error(f"Failed to recreate bucket for site {self.site_id}: {recreate_error}", exc_info=True)
+                    raise
         except Exception as e:
             logger.warning(f"Failed to create bucket for site {self.site_id}: {e}")
 
@@ -143,11 +197,12 @@ class SiteContainer:
         device_type: Optional[str] = None,
         device_ids: Optional[List[str]] = None,
         limit: int = 100,
-        deduplicate: bool = True,  # New parameter: deduplicate by (device_id, alarm_type)
+        deduplicate: bool = False,  # Disabled by default - return all alarms
     ) -> List[Dict[str, Any]]:
-        """Query alarms from site container (no need for site_id filter)"""
-        # Query more alarms if deduplication is enabled (to ensure we get the latest after dedup)
-        query_limit = limit * 3 if deduplicate else limit
+        """
+        Query alarms from site container - no caching, no deduplication by default
+        Returns all alarms matching the criteria directly from InfluxDB
+        """
         alarms = self.influx_client.query_alarms(
             start_time=start_time,
             end_time=end_time,
@@ -155,7 +210,7 @@ class SiteContainer:
             alarm_type=alarm_type,
             severity=severity,
             device_type=device_type,
-            limit=query_limit,
+            limit=limit,
         )
         # Filter by device_ids if provided
         if device_ids:
@@ -165,7 +220,7 @@ class SiteContainer:
             if not alarm.get("site_id"):
                 alarm["site_id"] = self.site_id
         
-        # Deduplicate: keep only the latest alarm for each (device_id, alarm_type) combination
+        # Optional deduplication (disabled by default)
         if deduplicate and alarms:
             from datetime import datetime
             # Group by (device_id, alarm_type) and keep only the latest one
@@ -576,7 +631,7 @@ class SiteContainer:
         metric: Optional[str] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        interval: str = "5m",
+        interval: str = "1m",
         limit: int = 1000,
     ) -> List[Dict[str, Any]]:
         """Query device time series from site container"""
@@ -928,14 +983,49 @@ class SiteContainerManager:
         Returns:
             True if successful
         """
-        container = self.get_container(site_id, auto_create=False)
+        # Remove from cache first
+        container = self._containers.pop(site_id, None)
+        
+        if not container:
+            # Try to get container without creating it
+            container = self.get_container(site_id, auto_create=False)
+        
         if container:
-            success = container.delete_all_data()
-            if success:
-                # Remove from cache
-                self._containers.pop(site_id, None)
-            return success
-        return False
+            try:
+                # Delete the entire bucket (not just data) to ensure complete cleanup
+                buckets_api = self.influx_client_base.client.buckets_api()
+                buckets = buckets_api.find_buckets()
+                
+                # Handle both Buckets object and list
+                if hasattr(buckets, 'buckets'):
+                    bucket_list = buckets.buckets
+                elif isinstance(buckets, list):
+                    bucket_list = buckets
+                else:
+                    bucket_list = list(buckets) if buckets else []
+                
+                bucket_obj = next((b for b in bucket_list if b.name == container.bucket), None)
+                if bucket_obj:
+                    buckets_api.delete_bucket(bucket_obj)
+                    logger.info(f"✓ Deleted bucket {container.bucket} for site {site_id}")
+                    return True
+                else:
+                    logger.warning(f"Bucket {container.bucket} not found for site {site_id}, may already be deleted")
+                    return True  # Consider it successful if bucket doesn't exist
+            except Exception as e:
+                logger.error(f"Failed to delete bucket for site {site_id}: {e}", exc_info=True)
+                # Fallback to deleting data only
+                try:
+                    success = container.delete_all_data()
+                    if success:
+                        logger.info(f"✓ Deleted all data from bucket {container.bucket} for site {site_id}")
+                    return success
+                except Exception as fallback_error:
+                    logger.error(f"Failed to delete data from bucket for site {site_id}: {fallback_error}", exc_info=True)
+                    return False
+        else:
+            logger.warning(f"Container for site {site_id} not found, may already be deleted")
+            return True  # Consider it successful if container doesn't exist
 
     def list_containers(self) -> List[str]:
         """List all site containers (buckets)"""

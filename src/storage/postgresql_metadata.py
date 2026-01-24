@@ -796,3 +796,27 @@ class PostgreSQLMetadataStorage:
             logger.error(f"Failed to delete diagnostic from PostgreSQL: {e}", exc_info=True)
             return False
 
+    def delete_diagnostics_by_site(self, site_id: str) -> int:
+        """
+        Delete all diagnostic metadata for a specific site
+
+        Args:
+            site_id: Site ID
+
+        Returns:
+            Number of diagnostics deleted
+        """
+        try:
+            with self._get_session() as session:
+                diagnostics = session.query(self.DiagnosticModel).filter_by(site_id=site_id).all()
+                count = len(diagnostics)
+                if count > 0:
+                    for diagnostic in diagnostics:
+                        session.delete(diagnostic)
+                    logger.info(f"Deleted {count} diagnostic(s) for site {site_id} from PostgreSQL")
+                else:
+                    logger.debug(f"No diagnostics found for site {site_id} in PostgreSQL")
+                return count
+        except Exception as e:
+            logger.error(f"Failed to delete diagnostics for site {site_id} from PostgreSQL: {e}", exc_info=True)
+            return 0

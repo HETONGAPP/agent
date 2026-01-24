@@ -19,6 +19,15 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    sourcemap: true, // Enable source maps for production builds
+  },
+  optimizeDeps: {
+    // Disable source maps for pre-bundled dependencies to avoid warnings
+    esbuildOptions: {
+      sourcemap: false,
+    },
+  },
 });
 
 

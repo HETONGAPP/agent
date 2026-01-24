@@ -3,7 +3,7 @@
  * Main page showing map with all sites
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DataCenterMap } from '@/components/map/DataCenterMap';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -22,13 +22,16 @@ export const DataCenterMapPage = () => {
   const navigate = useNavigate();
 
   // Sites are preloaded in App.tsx, but refresh if needed (e.g., after adding a site)
-  // Only fetch if sites list is empty (fallback)
+  // Only fetch if sites list is empty (fallback) - use ref to prevent infinite loops
+  const hasFetchedRef = React.useRef(false);
   useEffect(() => {
-    if (sites.length === 0 && !loading) {
+    if (sites.length === 0 && !loading && !hasFetchedRef.current) {
       console.log('[DataCenterMapPage] Sites list empty, fetching...');
       fetchSites();
+      hasFetchedRef.current = true;
     }
-  }, [sites.length, loading, fetchSites]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Debug: Log sites when they change
   useEffect(() => {

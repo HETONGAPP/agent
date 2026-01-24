@@ -3,7 +3,7 @@
  * Displays a list of sites with their information and status
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Site } from '@/types';
 import { SiteStats } from '@/api/sites';
@@ -24,13 +24,28 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
   const { siteStats, fetchSiteStats } = useSiteStore();
 
   // Fetch stats for all sites when component mounts or sites change
+  // Use ref to prevent infinite loops
+  const sitesRef = React.useRef<string[]>([]);
   useEffect(() => {
-    sites.forEach((site) => {
-      if (site.site_id) {
-        fetchSiteStats(site.site_id);
-      }
-    });
-  }, [sites, fetchSiteStats]);
+    const currentSiteIds = sites.map(s => s.site_id).filter(Boolean) as string[];
+    const previousSiteIds = sitesRef.current;
+    
+    // Only fetch for new sites or if sites list changed
+    if (currentSiteIds.length === 0) return;
+    
+    const newSiteIds = currentSiteIds.filter(id => !previousSiteIds.includes(id));
+    const changed = currentSiteIds.length !== previousSiteIds.length || 
+                    currentSiteIds.some(id => !previousSiteIds.includes(id));
+    
+    if (changed && newSiteIds.length > 0) {
+      // Only fetch for new sites to avoid duplicate requests
+      newSiteIds.forEach((siteId) => {
+        fetchSiteStats(siteId);
+      });
+      sitesRef.current = currentSiteIds;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sites.length]); // Only depend on sites.length, not the full sites array
 
   // WebSocket for real-time updates
   const { connected } = useWebSocket({
@@ -49,11 +64,14 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
   });
 
   // Polling for real-time updates (always enabled as backup)
+  // Limit to first 10 sites to avoid overwhelming the API
   useRealtime({
     enabled: true,
-    interval: connected ? 20000 : 10000, // 20s when WebSocket connected, 10s when not
+    interval: connected ? 30000 : 20000, // 30s when WebSocket connected, 20s when not (increased intervals)
     onUpdate: () => {
-      sites.forEach((site) => {
+      // Only fetch stats for a limited number of sites if there are many
+      const sitesToPoll = sites.slice(0, 10); // Limit to first 10 sites for performance
+      sitesToPoll.forEach((site) => {
         if (site.site_id) {
           fetchSiteStats(site.site_id);
         }

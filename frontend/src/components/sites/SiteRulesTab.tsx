@@ -274,6 +274,35 @@ export const SiteRulesTab = ({
     );
   }
   
+  // Helper function to get unit from row
+  const getUnit = useCallback((row: any) => {
+    let unit = row.rule_unit;
+    const condition = row.fullRule?.condition || {};
+    const field = condition.field || '';
+    
+    // If unit is missing, try to infer from field name
+    if (!unit && field) {
+      const fieldLower = field.toLowerCase();
+      if (fieldLower.includes('soc') || fieldLower.includes('soh')) {
+        unit = '%';
+      } else if (fieldLower.includes('temperature') || fieldLower.includes('temp')) {
+        unit = '°C';
+      } else if (fieldLower.includes('voltage') || fieldLower.includes('voltage')) {
+        unit = 'V';
+      } else if (fieldLower.includes('current')) {
+        unit = 'A';
+      } else if (fieldLower.includes('power')) {
+        unit = 'kW';
+      } else if (fieldLower.includes('energy')) {
+        unit = 'kWh';
+      } else if (fieldLower.includes('frequency')) {
+        unit = 'Hz';
+      }
+    }
+    
+    return unit || '';
+  }, []);
+
   // Memoize columns to prevent re-creation on every render
   const rulesColumns: Column<any>[] = useMemo(() => [
     {
@@ -340,43 +369,37 @@ export const SiteRulesTab = ({
     {
       key: 'rule_value',
       header: 'Value',
-      width: '12%',
+      width: '10%',
       render: (row) => {
         const value = row.rule_value;
-        let unit = row.rule_unit;
-        const condition = row.fullRule?.condition || {};
-        const field = condition.field || '';
-        
-        // If unit is missing, try to infer from field name
-        if (!unit && field) {
-          const fieldLower = field.toLowerCase();
-          if (fieldLower.includes('soc') || fieldLower.includes('soh')) {
-            unit = '%';
-          } else if (fieldLower.includes('temperature') || fieldLower.includes('temp')) {
-            unit = '°C';
-          } else if (fieldLower.includes('voltage') || fieldLower.includes('voltage')) {
-            unit = 'V';
-          } else if (fieldLower.includes('current')) {
-            unit = 'A';
-          } else if (fieldLower.includes('power')) {
-            unit = 'kW';
-          } else if (fieldLower.includes('energy')) {
-            unit = 'kWh';
-          } else if (fieldLower.includes('frequency')) {
-            unit = 'Hz';
-          }
-        }
         
         if (value === '-' || value === null || value === undefined) {
           return <span className="text-gray-500">-</span>;
         }
         
         const displayValue = typeof value === 'number' ? value.toString() : String(value);
-        const fullText = unit ? `${displayValue} ${unit}` : displayValue;
         
         return (
           <span className="font-mono text-cyan-400">
-            {fullText}
+            {displayValue}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'rule_unit',
+      header: 'Unit',
+      width: '8%',
+      render: (row) => {
+        const unit = getUnit(row);
+        
+        if (!unit) {
+          return <span className="text-gray-500">-</span>;
+        }
+        
+        return (
+          <span className="text-gray-400 text-sm">
+            {unit}
           </span>
         );
       },
@@ -456,7 +479,7 @@ export const SiteRulesTab = ({
         );
       },
     },
-  ], [onEditRule, siteId, onToast, onRefreshRules]);
+  ], [onEditRule, siteId, onToast, onRefreshRules, getUnit]);
   
   // Get device types that have rules (only show device types with existing rules)
   const availableDeviceTypes = useMemo(() => {

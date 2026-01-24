@@ -26,12 +26,13 @@ function App() {
   // Preload global shared data on app mount
   // This ensures sites data is available to all pages without duplicate fetches
   useEffect(() => {
-    // Only fetch if sites list is empty and not currently loading
+    // Only fetch once on mount if sites list is empty
     if (sites.length === 0 && !sitesLoading) {
       console.log('[App] Preloading sites data...');
       fetchSites();
     }
-  }, [sites.length, sitesLoading, fetchSites]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
   
   // Global listener for diagnostic_created events - shows toast on any page
   useEffect(() => {

@@ -256,21 +256,26 @@ def register_alarm_routes(app):
                         normalized_containers = [str(cid) for cid in all_containers]
                         unique_containers = list(dict.fromkeys(normalized_containers))
                         
-                        # Execute queries in parallel
-                        max_workers = min(5, len(unique_containers))
-                        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                            futures = {executor.submit(query_container_alarm_summary, cid): cid for cid in unique_containers}
-                            for future in concurrent.futures.as_completed(futures):
-                                try:
-                                    result = future.result()
-                                    if result:
-                                        site_id_val = result.get("site_id")
-                                        if site_id_val:
-                                            result["site_id"] = str(site_id_val)
-                                        site_summaries.append(result)
-                                except Exception as e:
-                                    container_id = futures[future]
-                                    logger.warning(f"Failed to query alarm summary from container {container_id}: {e}")
+                        # Execute queries in parallel (only if there are containers)
+                        if unique_containers:
+                            max_workers = min(5, len(unique_containers))
+                            # Ensure max_workers is at least 1
+                            max_workers = max(1, max_workers)
+                            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                                futures = {executor.submit(query_container_alarm_summary, cid): cid for cid in unique_containers}
+                                for future in concurrent.futures.as_completed(futures):
+                                    try:
+                                        result = future.result()
+                                        if result:
+                                            site_id_val = result.get("site_id")
+                                            if site_id_val:
+                                                result["site_id"] = str(site_id_val)
+                                            site_summaries.append(result)
+                                    except Exception as e:
+                                        container_id = futures[future]
+                                        logger.warning(f"Failed to query alarm summary from container {container_id}: {e}")
+                        else:
+                            logger.debug("No containers found for alarm aggregation")
                         
                         # Deduplicate
                         site_summaries = deduplicate_site_summaries(site_summaries)

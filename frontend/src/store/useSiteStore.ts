@@ -6,6 +6,13 @@
 import { create } from 'zustand';
 import { Site, SiteStats, SiteRules, getSites, getSite, getSiteStats, getSiteRules, getSiteDevices, deleteSite, updateSite } from '@/api/sites';
 
+// Request deduplication: track ongoing requests to prevent duplicate calls
+const ongoingRequests = new Map<string, Promise<any>>();
+
+// Cooldown period after rate limit errors (in milliseconds)
+const RATE_LIMIT_COOLDOWN = 60000; // 60 seconds
+const lastRateLimitTime = new Map<string, number>();
+
 interface SiteState {
   sites: Site[];
   selectedSite: Site | null;
@@ -37,45 +44,96 @@ export const useSiteStore = create<SiteState>((set, get) => ({
   error: null,
 
   fetchSites: async () => {
-    set({ loading: true, error: null });
-    try {
-      console.log('[SiteStore] Fetching sites...');
-      const response = await getSites();
-      console.log('[SiteStore] Sites response:', JSON.stringify(response, null, 2));
-      
-      // Handle different response formats
-      if (response.status === 'success') {
-        // Check if data is nested or direct
-        const sitesList = response.data?.sites || response.data || [];
-        console.log('[SiteStore] Parsed sites list:', sitesList.length, 'sites');
-        console.log('[SiteStore] Sites data:', sitesList);
-        
-        if (Array.isArray(sitesList) && sitesList.length > 0) {
-          console.log('[SiteStore] ✅ Setting sites:', sitesList.length, 'sites');
-          sitesList.forEach((s, i) => {
-            console.log(`[SiteStore] Site ${i}:`, {
-              id: s.site_id,
-              name: s.site_name,
-              lat: s.latitude,
-              lng: s.longitude,
-              hasCoords: !!(s.latitude && s.longitude)
-            });
-          });
-          set({ sites: sitesList, loading: false, error: null });
-        } else {
-          console.warn('[SiteStore] ⚠️ No sites in response or empty array');
-          set({ sites: [], loading: false, error: null });
-        }
+    const requestKey = 'fetchSites';
+    
+    // Check cooldown period after rate limit
+    const lastRateLimit = lastRateLimitTime.get(requestKey);
+    if (lastRateLimit) {
+      const timeSinceRateLimit = Date.now() - lastRateLimit;
+      if (timeSinceRateLimit < RATE_LIMIT_COOLDOWN) {
+        const waitTime = Math.ceil((RATE_LIMIT_COOLDOWN - timeSinceRateLimit) / 1000);
+        console.log(`[SiteStore] Rate limit cooldown active, waiting ${waitTime}s before retry...`);
+        return; // Skip request during cooldown
       } else {
-        console.warn('[SiteStore] ❌ Failed to fetch sites:', response);
-        const errorMsg = response.message || response.data?.message || 'Failed to fetch sites';
-        set({ error: errorMsg, loading: false, sites: [] });
+        // Cooldown expired, clear it
+        lastRateLimitTime.delete(requestKey);
       }
-    } catch (error: any) {
-      console.error('[SiteStore] ❌ Error fetching sites:', error);
-      console.error('[SiteStore] Error details:', error?.response?.data || error?.message);
-      set({ error: error?.message || 'An error occurred while fetching sites', loading: false, sites: [] });
     }
+    
+    // Check if there's an ongoing request
+    if (ongoingRequests.has(requestKey)) {
+      console.log('[SiteStore] fetchSites already in progress, waiting...');
+      try {
+        await ongoingRequests.get(requestKey);
+        return; // Request completed, data should be updated
+      } catch (error) {
+        // If the ongoing request failed, continue with new request
+        console.log('[SiteStore] Previous fetchSites failed, retrying...');
+      }
+    }
+    
+    set({ loading: true, error: null });
+    
+    // Create and track the request
+    const requestPromise = (async () => {
+      try {
+        console.log('[SiteStore] Fetching sites...');
+        const response = await getSites();
+        console.log('[SiteStore] Sites response:', JSON.stringify(response, null, 2));
+        
+        // Handle different response formats
+        if (response.status === 'success') {
+          // Check if data is nested or direct
+          const sitesList = response.data?.sites || response.data || [];
+          console.log('[SiteStore] Parsed sites list:', sitesList.length, 'sites');
+          console.log('[SiteStore] Sites data:', sitesList);
+          
+          if (Array.isArray(sitesList) && sitesList.length > 0) {
+            console.log('[SiteStore] ✅ Setting sites:', sitesList.length, 'sites');
+            sitesList.forEach((s, i) => {
+              console.log(`[SiteStore] Site ${i}:`, {
+                id: s.site_id,
+                name: s.site_name,
+                lat: s.latitude,
+                lng: s.longitude,
+                hasCoords: !!(s.latitude && s.longitude)
+              });
+            });
+            // Clear rate limit cooldown on success
+            lastRateLimitTime.delete(requestKey);
+            set({ sites: sitesList, loading: false, error: null });
+          } else {
+            console.warn('[SiteStore] ⚠️ No sites in response or empty array');
+            // Clear rate limit cooldown on success (even if empty)
+            lastRateLimitTime.delete(requestKey);
+            set({ sites: [], loading: false, error: null });
+          }
+        } else {
+          console.warn('[SiteStore] ❌ Failed to fetch sites:', response);
+          const errorMsg = response.message || response.data?.message || 'Failed to fetch sites';
+          set({ error: errorMsg, loading: false, sites: [] });
+        }
+      } catch (error: any) {
+        console.error('[SiteStore] ❌ Error fetching sites:', error);
+        console.error('[SiteStore] Error details:', error?.response?.data || error?.message);
+        
+        // If rate limited (429), set cooldown period
+        if (error?.response?.status === 429 || error?.isRateLimit) {
+          console.warn('[SiteStore] Rate limited, setting cooldown period');
+          lastRateLimitTime.set(requestKey, Date.now());
+          set({ loading: false }); // Just stop loading, don't clear sites or set error
+        } else {
+          set({ error: error?.message || 'An error occurred while fetching sites', loading: false, sites: [] });
+        }
+        throw error; // Re-throw to let waiting requests know it failed
+      } finally {
+        // Remove from ongoing requests
+        ongoingRequests.delete(requestKey);
+      }
+    })();
+    
+    ongoingRequests.set(requestKey, requestPromise);
+    await requestPromise;
   },
 
   fetchSite: async (siteId: string) => {
@@ -111,15 +169,51 @@ export const useSiteStore = create<SiteState>((set, get) => ({
   },
 
   fetchSiteStats: async (siteId: string) => {
-    try {
-      const response = await getSiteStats(siteId);
-      if (response.status === 'success' && response.data) {
-        const stats = get().siteStats;
-        set({ siteStats: { ...stats, [siteId]: response.data } });
+    const requestKey = `fetchSiteStats_${siteId}`;
+    
+    // Check cooldown period after rate limit
+    const lastRateLimit = lastRateLimitTime.get(requestKey);
+    if (lastRateLimit) {
+      const timeSinceRateLimit = Date.now() - lastRateLimit;
+      if (timeSinceRateLimit < RATE_LIMIT_COOLDOWN) {
+        return; // Skip request during cooldown
+      } else {
+        lastRateLimitTime.delete(requestKey);
       }
-    } catch (error) {
-      console.error(`[SiteStore] Error fetching site stats for ${siteId}:`, error);
     }
+    
+    // Check if there's an ongoing request for this site
+    if (ongoingRequests.has(requestKey)) {
+      console.log(`[SiteStore] fetchSiteStats for ${siteId} already in progress, skipping...`);
+      return;
+    }
+    
+    // Create and track the request
+    const requestPromise = (async () => {
+      try {
+        const response = await getSiteStats(siteId);
+        if (response.status === 'success' && response.data) {
+          // Clear rate limit cooldown on success
+          lastRateLimitTime.delete(requestKey);
+          const stats = get().siteStats;
+          set({ siteStats: { ...stats, [siteId]: response.data } });
+        }
+      } catch (error: any) {
+        console.error(`[SiteStore] Error fetching site stats for ${siteId}:`, error);
+        // If rate limited, set cooldown
+        if (error?.response?.status === 429 || error?.isRateLimit) {
+          lastRateLimitTime.set(requestKey, Date.now());
+        }
+      } finally {
+        // Remove from ongoing requests after a short delay to allow batching
+        setTimeout(() => {
+          ongoingRequests.delete(requestKey);
+        }, 1000); // 1 second cooldown
+      }
+    })();
+    
+    ongoingRequests.set(requestKey, requestPromise);
+    await requestPromise;
   },
 
   fetchSiteRules: async (siteId: string) => {

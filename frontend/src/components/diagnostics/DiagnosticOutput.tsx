@@ -265,11 +265,12 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                     : 'bg-gradient-to-br from-green-950/40 via-green-900/30 to-green-950/40 border-green-500/60 shadow-lg shadow-green-500/20'
                 }`}
               >
-                <div className="p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1">
+                <div className="p-6 lg:p-8">
+                  <div className="space-y-4">
+                    {/* Header Section */}
+                    <div className="flex items-start gap-5">
                       {/* Icon Section */}
-                      <div className={`p-4 rounded-xl ${
+                      <div className={`flex-shrink-0 p-4 rounded-xl ${
                         report.risk_level === 'High'
                           ? 'bg-red-500/20 border-2 border-red-500/50'
                           : report.risk_level === 'Medium'
@@ -277,49 +278,84 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                           : 'bg-green-500/20 border-2 border-green-500/50'
                       }`}>
                         {report.risk_level === 'High' ? (
-                          <AlertCircle size={28} className="text-red-400" />
+                          <AlertCircle size={32} className="text-red-400" />
                         ) : report.risk_level === 'Medium' ? (
-                          <AlertTriangle size={28} className="text-amber-400" />
+                          <AlertTriangle size={32} className="text-amber-400" />
                         ) : (
-                          <Shield size={28} className="text-green-400" />
+                          <Shield size={32} className="text-green-400" />
                         )}
                       </div>
                       
-                      {/* Content Section */}
-                      <div className="flex-1">
-                        <div className="text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">
-                          Risk Assessment
+                      {/* Title and Badge Section */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">
+                              Risk Assessment
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <RiskLevelBadge level={report.risk_level} />
+                              {report.risk_level === 'High' && (
+                                <span className="px-3 py-1.5 text-xs font-semibold bg-red-500/30 text-red-300 border border-red-500/50 rounded-full animate-pulse whitespace-nowrap">
+                                  Immediate Attention Required
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <RiskLevelBadge level={report.risk_level} />
-                          {report.risk_level === 'High' && (
-                            <span className="px-3 py-1 text-xs font-semibold bg-red-500/30 text-red-300 border border-red-500/50 rounded-full animate-pulse">
-                              Immediate Attention Required
-                            </span>
-                          )}
-                        </div>
-                        {report.risk_level === 'High' && (
-                          <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                            <p className="text-sm text-red-200 leading-relaxed">
-                              <strong className="font-semibold">Critical Risk Detected:</strong> This site requires immediate investigation and corrective action. Please review the root causes and recommended actions below.
-                            </p>
-                          </div>
-                        )}
-                        {report.risk_level === 'Medium' && (
-                          <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                            <p className="text-sm text-amber-200 leading-relaxed">
-                              <strong className="font-semibold">Moderate Risk:</strong> This site should be monitored closely. Review the analysis below for potential issues.
-                            </p>
-                          </div>
-                        )}
-                        {report.risk_level === 'Low' && (
-                          <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                            <p className="text-sm text-green-200 leading-relaxed">
-                              <strong className="font-semibold">Low Risk:</strong> System appears to be operating normally. Continue routine monitoring.
-                            </p>
-                          </div>
-                        )}
                       </div>
+                    </div>
+
+                    {/* Description Section */}
+                    <div className={`mt-4 p-4 rounded-lg border ${
+                      report.risk_level === 'High'
+                        ? 'bg-red-500/10 border-red-500/30'
+                        : report.risk_level === 'Medium'
+                        ? 'bg-amber-500/10 border-amber-500/30'
+                        : 'bg-green-500/10 border-green-500/30'
+                    }`}>
+                      {report.risk_level === 'High' && (
+                        <div className="space-y-2">
+                          <p className={`text-sm font-semibold ${
+                            report.risk_level === 'High' ? 'text-red-200' : ''
+                          }`}>
+                            Critical Risk Detected
+                          </p>
+                          <p className={`text-sm leading-relaxed ${
+                            report.risk_level === 'High' ? 'text-red-200/90' : ''
+                          }`}>
+                            This site requires immediate investigation and corrective action. Please review the root causes and recommended actions below.
+                          </p>
+                        </div>
+                      )}
+                      {report.risk_level === 'Medium' && (
+                        <div className="space-y-2">
+                          <p className={`text-sm font-semibold ${
+                            report.risk_level === 'Medium' ? 'text-amber-200' : ''
+                          }`}>
+                            Moderate Risk
+                          </p>
+                          <p className={`text-sm leading-relaxed ${
+                            report.risk_level === 'Medium' ? 'text-amber-200/90' : ''
+                          }`}>
+                            This site should be monitored closely. Review the analysis below for potential issues.
+                          </p>
+                        </div>
+                      )}
+                      {report.risk_level === 'Low' && (
+                        <div className="space-y-2">
+                          <p className={`text-sm font-semibold ${
+                            report.risk_level === 'Low' ? 'text-green-200' : ''
+                          }`}>
+                            Low Risk
+                          </p>
+                          <p className={`text-sm leading-relaxed ${
+                            report.risk_level === 'Low' ? 'text-green-200/90' : ''
+                          }`}>
+                            System appears to be operating normally. Continue routine monitoring.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -10,6 +10,7 @@ import { useDiagnosticAgentStore } from '@/store/useDiagnosticAgentStore';
 import { useDiagnosticWebSocket } from '@/hooks/useDiagnosticWebSocket';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { appConfig } from '@/config/app.config';
 
 export const DiagnosticPage = () => {
@@ -17,6 +18,7 @@ export const DiagnosticPage = () => {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('-24h');
   const [isStarting, setIsStarting] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const { isRunning, diagnosticId, startDiagnostic, reset } = useDiagnosticAgentStore();
 
@@ -26,6 +28,19 @@ export const DiagnosticPage = () => {
     enabled: !!siteId,
     baseUrl: appConfig.apiBaseUrl,
   });
+
+  // Set initial loading to false once WebSocket is connected or after a short delay
+  useEffect(() => {
+    if (isConnected) {
+      setInitialLoading(false);
+    } else {
+      // If WebSocket doesn't connect within 2 seconds, show page anyway
+      const timer = setTimeout(() => {
+        setInitialLoading(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected]);
 
   const handleStartDiagnostic = async () => {
     if (!siteId) return;
@@ -71,6 +86,11 @@ export const DiagnosticPage = () => {
         </div>
       </div>
     );
+  }
+
+  // Show loading state during initial connection
+  if (initialLoading) {
+    return <PageLoading message="Connecting to diagnostic service..." />;
   }
 
   return (

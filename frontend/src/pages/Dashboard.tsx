@@ -6,6 +6,7 @@
 import { useEffect, useCallback, useState } from 'react';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chart } from '@/components/ui/Chart';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { useDevices } from '@/hooks/useDevices';
 import { useAlarms } from '@/hooks/useAlarms';
 import { useDiagnostics } from '@/hooks/useDiagnostics';
@@ -26,6 +27,7 @@ export const Dashboard = () => {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const fetchSystemMetrics = useCallback(async () => {
     setLoadingMetrics(true);
@@ -84,12 +86,21 @@ export const Dashboard = () => {
   }, [userLocation]);
 
   useEffect(() => {
-    fetchDeviceStats();
-    fetchAlarmStats();
-    fetchDiagnosticStats();
-    // Fetch diagnostics list for real-time risk level distribution
-    fetchDiagnostics(undefined, 1000, 0); // Fetch up to 1000 diagnostics for accurate distribution
-    fetchSystemMetrics();
+    const loadInitialData = async () => {
+      setInitialLoading(true);
+      try {
+        await Promise.all([
+          fetchDeviceStats(),
+          fetchAlarmStats(),
+          fetchDiagnosticStats(),
+          fetchDiagnostics(undefined, 1000, 0),
+          fetchSystemMetrics(),
+        ]);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    loadInitialData();
     // Weather will be fetched when userLocation is available
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only execute once on component mount
@@ -220,6 +231,7 @@ export const Dashboard = () => {
   }, [connected, fetchDiagnosticStats, fetchAlarmStats, fetchDeviceStats, fetchDiagnostics]);
 
   // Fallback polling (only when WebSocket is not connected)
+  // All hooks must be called before any conditional returns
   useRealtime({
     enabled: !connected,
     interval: 30000, // 30 seconds - more frequent for better real-time feel
@@ -322,6 +334,12 @@ export const Dashboard = () => {
           : '#16A34A',
     }));
   })();
+
+  // Show loading state during initial data fetch
+  // This must be after all hooks to comply with Rules of Hooks
+  if (initialLoading) {
+    return <PageLoading message="Loading dashboard..." />;
+  }
 
   return (
     <div className="space-y-6">

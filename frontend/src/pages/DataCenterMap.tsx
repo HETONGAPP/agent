@@ -13,6 +13,7 @@ import { Site } from '@/types';
 import { useSiteStore } from '@/store/useSiteStore';
 import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 export const DataCenterMapPage = () => {
   const { sites, loading, fetchSites, error } = useSiteStore();
@@ -48,6 +49,11 @@ export const DataCenterMapPage = () => {
     setClickedPosition(null);
     fetchSites();
   };
+
+  // Show loading state during initial data fetch
+  if (loading && sites.length === 0) {
+    return <PageLoading message="Loading data center map..." />;
+  }
 
   return (
     <div className="space-y-6">

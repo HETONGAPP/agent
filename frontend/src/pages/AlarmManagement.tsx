@@ -27,6 +27,7 @@ import { DEVICE_TYPES } from '@/config/constants';
 import { generateAlarmDiagnostic } from '@/api/diagnostics';
 import { generateSiteDiagnostic } from '@/api/sites';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 export const AlarmManagement = () => {
   const {
@@ -40,6 +41,7 @@ export const AlarmManagement = () => {
     setFilters,
     setPagination,
   } = useAlarms(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   
 
   const { addToast } = useToastStore();
@@ -127,8 +129,18 @@ export const AlarmManagement = () => {
 
   // Initial data fetch on mount - ensure data is loaded immediately
   useEffect(() => {
-    fetchAlarms(filters, pagination.limit, pagination.offset, true);
-    fetchStats();
+    const loadInitialData = async () => {
+      setInitialLoading(true);
+      try {
+        await Promise.all([
+          fetchAlarms(filters, pagination.limit, pagination.offset, true),
+          fetchStats(),
+        ]);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -363,6 +375,11 @@ export const AlarmManagement = () => {
       paginationOffset: pagination.offset,
       filteredDataCount: filteredData.length,
     });
+  }
+
+  // Show loading state during initial data fetch
+  if (initialLoading) {
+    return <PageLoading message="Loading alarms..." />;
   }
 
   return (

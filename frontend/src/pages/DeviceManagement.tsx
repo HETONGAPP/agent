@@ -22,6 +22,7 @@ import { exportDevices } from '@/utils/export';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 export const DeviceManagement = () => {
   const {
@@ -34,6 +35,7 @@ export const DeviceManagement = () => {
     setFilters,
   } = useDevices(true);
   const { addToast } = useToastStore();
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [filters, setLocalFilters] = useState<DeviceFilters>({});
   const [selectedDeviceType, setSelectedDeviceType] = useState<string>('');
@@ -42,8 +44,18 @@ export const DeviceManagement = () => {
 
   // Initial data fetch on mount
   useEffect(() => {
-    fetchDevices();
-    fetchStats();
+    const loadInitialData = async () => {
+      setInitialLoading(true);
+      try {
+        await Promise.all([
+          fetchDevices(),
+          fetchStats(),
+        ]);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,6 +321,11 @@ export const DeviceManagement = () => {
       ),
     },
   ];
+
+  // Show loading state during initial data fetch
+  if (initialLoading) {
+    return <PageLoading message="Loading devices..." />;
+  }
 
   return (
     <div className="space-y-6">

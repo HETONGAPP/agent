@@ -11,6 +11,7 @@ import { useDevices } from '@/hooks/useDevices';
 import { useAlarms } from '@/hooks/useAlarms';
 import { useDiagnostics } from '@/hooks/useDiagnostics';
 import { Button } from '@/components/ui/Button';
+import { PageLoading } from '@/components/ui/PageLoading';
 import { FlowNode, Device, Alarm, Diagnostic } from '@/types';
 
 export const DataFlowVisualization = () => {
@@ -18,15 +19,26 @@ export const DataFlowVisualization = () => {
   const { devices, fetchDevices } = useDevices(true);
   const { alarms, fetchAlarms } = useAlarms(true);
   const { diagnostics, fetchDiagnostics } = useDiagnostics(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<{
     type: 'device' | 'alarm' | 'diagnostic';
     data: Device | Alarm | Diagnostic;
   } | null>(null);
 
   useEffect(() => {
-    fetchDevices();
-    fetchAlarms();
-    fetchDiagnostics();
+    const loadInitialData = async () => {
+      setInitialLoading(true);
+      try {
+        await Promise.all([
+          fetchDevices(),
+          fetchAlarms(),
+          fetchDiagnostics(),
+        ]);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    loadInitialData();
   }, [fetchDevices, fetchAlarms, fetchDiagnostics]);
 
   // Update selected node when selection changes
@@ -85,6 +97,11 @@ export const DataFlowVisualization = () => {
     setSelectedNodeId(null);
     setSelectedNode(null);
   };
+
+  // Show loading state during initial data fetch
+  if (initialLoading) {
+    return <PageLoading message="Loading data flow visualization..." />;
+  }
 
   return (
     <div className="space-y-6 h-full flex flex-col relative">

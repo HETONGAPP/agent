@@ -25,6 +25,7 @@ import { useSiteStore } from '@/store/useSiteStore';
 import { DiagnosticOutput } from '@/components/diagnostics/DiagnosticOutput';
 import { DiagnosticDeleteModal } from '@/components/diagnostics/DiagnosticDeleteModal';
 import { Modal } from '@/components/ui/Modal';
+import { PageLoading } from '@/components/ui/PageLoading';
 
 export const DiagnosticReports = () => {
   const location = useLocation();
@@ -68,6 +69,7 @@ export const DiagnosticReports = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [diagnosticToDelete, setDiagnosticToDelete] = useState<Diagnostic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   
   // Fetch sites on mount
   useEffect(() => {
@@ -86,20 +88,29 @@ export const DiagnosticReports = () => {
 
   // Initial data fetch on mount - ensure data is loaded immediately
   useEffect(() => {
-    // Only use filters if explicitly navigating from another page (shouldHighlight = true)
-    // Otherwise, fetch all diagnostics to show the complete list
-    const initialFilters = (shouldHighlight && (alarmIdParam || siteIdParam)) ? filters : {};
-    fetchDiagnostics(initialFilters, pagination.limit, pagination.offset);
-    // Also update local filters to match
-    if (!shouldHighlight || !(alarmIdParam || siteIdParam)) {
-      setLocalFilters({});
-      setFilters({});
-    }
-    // Delay stats fetch to avoid blocking the initial render
-    // Pass current filters to stats to keep them in sync
-    setTimeout(() => {
-      fetchStats(undefined, undefined, initialFilters);
-    }, 300);
+    const loadInitialData = async () => {
+      setInitialLoading(true);
+      try {
+        // Only use filters if explicitly navigating from another page (shouldHighlight = true)
+        // Otherwise, fetch all diagnostics to show the complete list
+        const initialFilters = (shouldHighlight && (alarmIdParam || siteIdParam)) ? filters : {};
+        await Promise.all([
+          fetchDiagnostics(initialFilters, pagination.limit, pagination.offset),
+          new Promise(resolve => setTimeout(() => {
+            fetchStats(undefined, undefined, initialFilters);
+            resolve(undefined);
+          }, 300)),
+        ]);
+        // Also update local filters to match
+        if (!shouldHighlight || !(alarmIdParam || siteIdParam)) {
+          setLocalFilters({});
+          setFilters({});
+        }
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -397,6 +408,90 @@ export const DiagnosticReports = () => {
     },
   ];
 
+  // Prepare statistics memo before conditional return
+  // This must be before conditional return to comply with Rules of Hooks
+  const statisticsMemo = useMemo(() => {
+    if (!deferredStats) return null;
+    const isPending = deferredStats !== stats;
+    
+    // Normalize risk level keys to handle case sensitivity issues
+    const byRiskLevel = deferredStats.by_risk_level || {} as Record<string, number>;
+    const high = (byRiskLevel.High || byRiskLevel['High'] || (byRiskLevel as any).high || 0) as number;
+    const medium = (byRiskLevel.Medium || byRiskLevel['Medium'] || (byRiskLevel as any).medium || 0) as number;
+    const low = (byRiskLevel.Low || byRiskLevel['Low'] || (byRiskLevel as any).low || 0) as number;
+    
+    // Debug: Log stats and diagnostics to identify mismatch
+    if (diagnostics.length > 0 && deferredStats.total > 0) {
+      const diagnosticsByRisk = diagnostics.reduce((acc, d) => {
+        const level = d.risk_level || 'Unknown';
+        acc[level] = (acc[level] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Only log if there's a mismatch
+      if (high !== (diagnosticsByRisk.High || diagnosticsByRisk.high || 0) ||
+          medium !== (diagnosticsByRisk.Medium || diagnosticsByRisk.medium || 0) ||
+          low !== (diagnosticsByRisk.Low || diagnosticsByRisk.low || 0)) {
+        console.log('[DiagnosticReports] Stats mismatch detected:', {
+          stats: { high, medium, low, total: deferredStats.total },
+          diagnostics: diagnosticsByRisk,
+          diagnosticsCount: diagnostics.length,
+        });
+      }
+    }
+    
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Total Reports</p>
+              <p className={`text-2xl font-bold ${isPending ? 'text-gray-500' : 'text-white'}`}>
+                {isPending ? '...' : deferredStats.total || 0}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">High Risk</p>
+              <p className={`text-2xl font-bold ${isPending ? 'text-gray-500' : 'text-red-400'}`}>
+                {isPending ? '...' : high}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Medium Risk</p>
+              <p className={`text-2xl font-bold ${isPending ? 'text-gray-500' : 'text-orange-400'}`}>
+                {isPending ? '...' : medium}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">Low Risk</p>
+              <p className={`text-2xl font-bold ${isPending ? 'text-gray-500' : 'text-green-400'}`}>
+                {isPending ? '...' : low}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }, [deferredStats, stats, diagnostics]);
+
+  // Show loading state during initial data fetch
+  // This must be after all hooks to comply with Rules of Hooks
+  if (initialLoading) {
+    return <PageLoading message="Loading diagnostic reports..." />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -427,58 +522,7 @@ export const DiagnosticReports = () => {
       </div>
 
       {/* Statistics - Using deferred value and smooth transitions to prevent UI flashing */}
-      {useMemo(() => {
-        if (!deferredStats) return null;
-        const isPending = deferredStats !== stats;
-        
-        // Normalize risk level keys to handle case sensitivity issues
-        const byRiskLevel = deferredStats.by_risk_level || {};
-        const high = byRiskLevel.High || byRiskLevel.high || 0;
-        const medium = byRiskLevel.Medium || byRiskLevel.medium || 0;
-        const low = byRiskLevel.Low || byRiskLevel.low || 0;
-        
-        // Debug: Log stats and diagnostics to identify mismatch
-        if (diagnostics.length > 0 && deferredStats.total > 0) {
-          const diagnosticsByRisk = diagnostics.reduce((acc, d) => {
-            const level = d.risk_level || 'Unknown';
-            acc[level] = (acc[level] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-          
-          // Only log if there's a mismatch
-          if (high !== (diagnosticsByRisk.High || diagnosticsByRisk.high || 0) ||
-              medium !== (diagnosticsByRisk.Medium || diagnosticsByRisk.medium || 0) ||
-              low !== (diagnosticsByRisk.Low || diagnosticsByRisk.low || 0)) {
-            console.log('[DiagnosticReports] Stats mismatch detected:', {
-              stats: { high, medium, low, total: deferredStats.total },
-              diagnostics: diagnosticsByRisk,
-              diagnosticsCount: diagnostics.length,
-              byRiskLevel,
-            });
-          }
-        }
-        
-        return (
-          <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity duration-300 ${isPending ? 'opacity-60' : 'opacity-100'}`}>
-            <div className="card transition-all duration-200">
-              <div className="text-sm text-gray-400">Total Reports</div>
-              <div className="text-2xl font-bold text-white transition-all duration-200">{deferredStats.total}</div>
-            </div>
-            <div className="card transition-all duration-200">
-              <div className="text-sm text-gray-400">High Risk</div>
-              <div className="text-2xl font-bold text-red-400 transition-all duration-200">{high}</div>
-            </div>
-            <div className="card transition-all duration-200">
-              <div className="text-sm text-gray-400">Medium Risk</div>
-              <div className="text-2xl font-bold text-yellow-400 transition-all duration-200">{medium}</div>
-            </div>
-            <div className="card transition-all duration-200">
-              <div className="text-sm text-gray-400">Low Risk</div>
-              <div className="text-2xl font-bold text-green-400 transition-all duration-200">{low}</div>
-            </div>
-          </div>
-        );
-      }, [deferredStats, stats, diagnostics])}
+      {statisticsMemo}
 
       {/* Search and Filters */}
       <FilterBar 

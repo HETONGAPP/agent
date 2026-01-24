@@ -20,7 +20,7 @@ import { exportDiagnostics } from '@/utils/export';
 import { exportMultipleDiagnosticsToPDF } from '@/utils/pdf';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
-import { MapPin, Download, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { MapPin, Download, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Eye } from 'lucide-react';
 import { useSiteStore } from '@/store/useSiteStore';
 import { DiagnosticOutput } from '@/components/diagnostics/DiagnosticOutput';
 import { DiagnosticDeleteModal } from '@/components/diagnostics/DiagnosticDeleteModal';
@@ -371,28 +371,27 @@ export const DiagnosticReports = () => {
       header: 'Actions',
       render: (diagnostic) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="secondary"
-            size="sm"
+          <button
             onClick={(e) => {
               e.stopPropagation();
               fetchDiagnostic(diagnostic.alarm_id);
             }}
+            className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
+            title="View Details"
           >
-            View Details
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
+            <Eye size={16} />
+          </button>
+          <button
             onClick={(e) => {
               e.stopPropagation();
               setDiagnosticToDelete(diagnostic);
               setShowDeleteModal(true);
             }}
+            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+            title="Remove diagnostic"
           >
-            <Trash2 size={16} className="mr-1" />
-            Remove
-          </Button>
+            <Trash2 size={16} />
+          </button>
         </div>
       ),
     },

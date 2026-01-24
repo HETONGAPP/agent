@@ -43,11 +43,22 @@ const formatDate = (dateString?: string): string => {
 const cleanMarkdown = (text: string): string => {
   if (!text) return '';
   return text
+    // Remove markdown formatting
     .replace(/\*\*/g, '')
     .replace(/\*(?![*])/g, '')
     .replace(/###+/g, '##')
     .replace(/`/g, '')
     .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    // Remove special characters that cause PDF issues
+    .replace(/['']/g, "'")
+    .replace(/[""]/g, '"')
+    .replace(/[–—]/g, '-')
+    .replace(/…/g, '...')
+    // Remove extra whitespace
+    .replace(/\s+/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    // Remove control characters
+    .replace(/[\x00-\x1F\x7F]/g, '')
     .trim();
 };
 
@@ -119,6 +130,11 @@ export const exportDiagnosticToPDFDirect = async (
 
   // Helper function to add text with word wrap
   const addText = (text: string, fontSize: number = 11, isBold: boolean = false, color: string = '#000000') => {
+    if (!text) return;
+    
+    // Clean text before adding to PDF
+    const cleanedText = cleanMarkdown(String(text));
+    
     pdf.setFontSize(fontSize);
     pdf.setTextColor(color);
     if (isBold) {
@@ -128,12 +144,16 @@ export const exportDiagnosticToPDFDirect = async (
     }
     
     const maxWidth = pageWidth - 2 * margin;
-    const lines = pdf.splitTextToSize(text, maxWidth);
+    const lines = pdf.splitTextToSize(cleanedText, maxWidth);
     
     lines.forEach((line: string) => {
       checkNewPage();
-      pdf.text(line, margin, yPos);
-      yPos += lineHeight;
+      // Ensure line is properly encoded and remove problematic characters
+      const safeLine = line.replace(/[^\x20-\x7E\n\r]/g, '').trim();
+      if (safeLine) {
+        pdf.text(safeLine, margin, yPos);
+        yPos += lineHeight;
+      }
     });
   };
 
@@ -201,9 +221,13 @@ export const exportDiagnosticToPDFDirect = async (
     checkNewPage(sectionSpacing);
     addText('References', 14, true, '#f59e0b');
     yPos += 3;
-    report.references.forEach((ref) => {
+    report.references.forEach((ref, index) => {
       checkNewPage();
-      addText(`→ ${cleanMarkdown(ref)}`, 11, false);
+      // Clean reference text and format properly
+      const cleanedRef = cleanMarkdown(ref);
+      // Remove any markdown-style brackets and format as simple text
+      const formattedRef = cleanedRef.replace(/^\[|\]$/g, '').trim();
+      addText(`${index + 1}. ${formattedRef}`, 11, false);
     });
     yPos += sectionSpacing;
   }
@@ -292,6 +316,11 @@ export const exportMultipleDiagnosticsToPDF = async (
 
   // Helper function to add text with word wrap
   const addText = (text: string, fontSize: number = 11, isBold: boolean = false, color: string = '#000000') => {
+    if (!text) return;
+    
+    // Clean text before adding to PDF
+    const cleanedText = cleanMarkdown(String(text));
+    
     pdf.setFontSize(fontSize);
     pdf.setTextColor(color);
     if (isBold) {
@@ -301,12 +330,16 @@ export const exportMultipleDiagnosticsToPDF = async (
     }
     
     const maxWidth = pageWidth - 2 * margin;
-    const lines = pdf.splitTextToSize(text, maxWidth);
+    const lines = pdf.splitTextToSize(cleanedText, maxWidth);
     
     lines.forEach((line: string) => {
       checkNewPage();
-      pdf.text(line, margin, yPos);
-      yPos += lineHeight;
+      // Ensure line is properly encoded and remove problematic characters
+      const safeLine = line.replace(/[^\x20-\x7E\n\r]/g, '').trim();
+      if (safeLine) {
+        pdf.text(safeLine, margin, yPos);
+        yPos += lineHeight;
+      }
     });
   };
 
@@ -382,9 +415,13 @@ export const exportMultipleDiagnosticsToPDF = async (
       checkNewPage(sectionSpacing);
       addText('References', 14, true, '#f59e0b');
       yPos += 3;
-      report.references.forEach((ref) => {
+      report.references.forEach((ref, index) => {
         checkNewPage();
-        addText(`→ ${cleanMarkdown(ref)}`, 11, false);
+        // Clean reference text and format properly
+        const cleanedRef = cleanMarkdown(ref);
+        // Remove any markdown-style brackets and format as simple text
+        const formattedRef = cleanedRef.replace(/^\[|\]$/g, '').trim();
+        addText(`${index + 1}. ${formattedRef}`, 11, false);
       });
       yPos += sectionSpacing;
     }

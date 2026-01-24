@@ -4,13 +4,13 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { AlertCircle, Edit, Trash2, Filter } from 'lucide-react';
+import { AlertCircle, Edit, Trash2, Filter, Power, PowerOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { Pagination } from '@/components/ui/Pagination';
-import { deleteSiteRule } from '@/api/sites';
+import { deleteSiteRule, updateSiteRule } from '@/api/sites';
 
 // All supported device types
 const ALL_DEVICE_TYPES = [
@@ -83,6 +83,7 @@ export const SiteRulesTab = ({
         rule_value: condition.value ?? '-',
         rule_operator: condition.operator || '',
         rule_unit: condition.unit || '',
+        rule_enabled: rule.enabled !== false, // Default to true if not specified
         fullRule: rule,
       };
     })
@@ -107,6 +108,7 @@ export const SiteRulesTab = ({
       rule_value: condition.value ?? '-',
       rule_operator: condition.operator || '',
       rule_unit: condition.unit || '',
+      rule_enabled: rule.enabled !== false, // Default to true if not specified
       fullRule: rule,
     };
   });
@@ -369,10 +371,42 @@ export const SiteRulesTab = ({
     {
       key: 'actions',
       header: 'Actions',
-      width: '14%',
+      width: '18%',
       render: (row) => {
+        const isEnabled = row.rule_enabled !== false;
+        
         return (
           <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                if (!siteId || !row.fullRule) return;
+                
+                try {
+                  const updatedRule = {
+                    ...row.fullRule,
+                    enabled: !isEnabled,
+                  };
+                  
+                  const response = await updateSiteRule(siteId, row.rule_id, updatedRule);
+                  if (response.status === 'success') {
+                    onToast(`Rule ${isEnabled ? 'disabled' : 'enabled'} successfully`, 'success');
+                    onRefreshRules();
+                  } else {
+                    onToast(response.message || 'Failed to update rule', 'error');
+                  }
+                } catch (error: any) {
+                  onToast(error?.response?.data?.message || error?.message || 'Failed to update rule', 'error');
+                }
+              }}
+              className={`p-1.5 rounded transition-colors ${
+                isEnabled
+                  ? 'text-green-400 hover:text-green-300 hover:bg-green-500/10'
+                  : 'text-gray-400 hover:text-gray-300 hover:bg-gray-500/10'
+              }`}
+              title={isEnabled ? 'Disable rule' : 'Enable rule'}
+            >
+              {isEnabled ? <Power size={16} /> : <PowerOff size={16} />}
+            </button>
             <button
               onClick={() => {
                 if (row.fullRule) {

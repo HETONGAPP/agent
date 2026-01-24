@@ -20,6 +20,7 @@ from ...agent.dependencies import (
     get_agent_service,
     get_app_state,
     get_agent_service as get_agent_service_func,
+    get_postgres_metadata_storage,
 )
 from ...agent.rate_limiter import rate_limit_dependency
 
@@ -1022,6 +1023,7 @@ def register_site_routes(app):
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
         device_registry: Optional[DeviceRegistry] = Depends(get_device_registry),
+        postgres_storage = Depends(get_postgres_metadata_storage),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
         """Manually trigger diagnostic agent analysis for a site"""
@@ -1188,8 +1190,58 @@ def register_site_routes(app):
                             influx_client.write_diagnostic(alarm_id, diagnostic_dict, site_id=site_id, flush=True)
                     else:
                         influx_client.write_diagnostic(alarm_id, diagnostic_dict, site_id=site_id, flush=True)
+                    
+                    # Also save to PostgreSQL for metadata storage
+                    if postgres_storage:
+                        try:
+                            # Prepare diagnostic data for PostgreSQL
+                            diagnostic_metadata = {
+                                "alarm_id": alarm_id,
+                                "site_id": site_id,
+                                "risk_level": diagnostic_dict.get("risk_level", "Unknown"),
+                                "diagnostic_name": diagnostic_dict.get("diagnostic_name", ""),
+                                "metadata": diagnostic_dict.get("metadata", {}),
+                            }
+                            # Extract device_id and device_type from metadata if available
+                            if "metadata" in diagnostic_dict:
+                                metadata = diagnostic_dict["metadata"]
+                                if metadata.get("device_id"):
+                                    diagnostic_metadata["device_id"] = metadata["device_id"]
+                                if metadata.get("device_type"):
+                                    diagnostic_metadata["device_type"] = metadata["device_type"]
+                                if metadata.get("alarm_type"):
+                                    diagnostic_metadata["alarm_type"] = metadata["alarm_type"]
+                            
+                            # Set timestamp
+                            if "timestamp" in diagnostic_dict:
+                                diagnostic_metadata["generated_at"] = diagnostic_dict["timestamp"]
+                            
+                            success = postgres_storage.save_diagnostic(diagnostic_metadata)
+                            if success:
+                                logger.info(f"Saved diagnostic {alarm_id} to PostgreSQL")
+                            else:
+                                logger.warning(f"Failed to save diagnostic {alarm_id} to PostgreSQL")
+                        except Exception as e:
+                            logger.warning(f"Failed to save diagnostic to PostgreSQL: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to store diagnostic: {e}")
+            
+            # Broadcast diagnostic_created event via WebSocket
+            if websocket_manager:
+                try:
+                    diagnostic_dict = diagnostic_report.to_dict() if hasattr(diagnostic_report, 'to_dict') else diagnostic_report
+                    await websocket_manager.broadcast(
+                        EventType.DIAGNOSTIC_CREATED,
+                        {
+                            "alarm_id": alarm_id,
+                            "site_id": site_id,
+                            "id": alarm_id,
+                            "diagnostic": diagnostic_dict,
+                        }
+                    )
+                    logger.info(f"Broadcasted diagnostic_created event for {alarm_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to broadcast diagnostic_created event: {e}")
             
             return {
                 "status": "success",

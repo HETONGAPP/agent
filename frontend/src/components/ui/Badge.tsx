@@ -27,13 +27,15 @@ export const Badge = ({ type, value, size = 'md' }: BadgeProps) => {
         return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
       
       case 'risk':
-        if (value === RISK_LEVELS.HIGH) {
+        // Normalize value to handle case sensitivity
+        const normalizedValue = String(value).trim();
+        if (normalizedValue === RISK_LEVELS.HIGH || normalizedValue.toLowerCase() === 'high') {
           return 'bg-risk-high/20 text-risk-high border-risk-high/50';
         }
-        if (value === RISK_LEVELS.MEDIUM) {
+        if (normalizedValue === RISK_LEVELS.MEDIUM || normalizedValue.toLowerCase() === 'medium') {
           return 'bg-risk-medium/20 text-risk-medium border-risk-medium/50';
         }
-        if (value === RISK_LEVELS.LOW) {
+        if (normalizedValue === RISK_LEVELS.LOW || normalizedValue.toLowerCase() === 'low') {
           return 'bg-risk-low/20 text-risk-low border-risk-low/50';
         }
         return 'bg-gray-500/20 text-gray-400 border-gray-500/50';

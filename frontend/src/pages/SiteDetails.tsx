@@ -41,6 +41,8 @@ export const SiteDetails = () => {
     startDiagnostic,
     completeDiagnostic,
     getDiagnosticState,
+    hasShownToast,
+    markToastShown,
   } = useSiteDiagnosticStore();
 
   const {
@@ -263,15 +265,24 @@ export const SiteDetails = () => {
                 })[0]; // Get the first (newest) one
               
               if (latestDiagnostic) {
-                setDiagnosticResult(latestDiagnostic);
-                setShowDiagnosticModal(true);
+                const diagnosticId = latestDiagnostic.alarm_id || latestDiagnostic.id;
+                // Only show modal and toast if we haven't shown it for this diagnostic yet
+                if (diagnosticId && !hasShownToast(diagnosticId)) {
+                  markToastShown(diagnosticId);
+                  setDiagnosticResult(latestDiagnostic);
+                  setShowDiagnosticModal(true);
+                  // Show success toast notification with site context (global, but with site info)
+                  const siteName = selectedSite?.site_name || siteId;
+                  addToast(`AI diagnostic analysis completed for site: ${siteName}`, 'success');
+                } else if (diagnosticId && hasShownToast(diagnosticId)) {
+                  // Toast already shown globally, but still show modal if on this page
+                  setDiagnosticResult(latestDiagnostic);
+                  setShowDiagnosticModal(true);
+                }
               }
             } catch (error) {
               console.error('[SiteDetails] Error getting diagnostic result:', error);
             }
-            
-            // Show success toast notification
-            addToast('AI diagnostic analysis completed', 'success');
           } else {
             console.log('[SiteDetails] No new diagnostic found yet, continuing to wait');
           }
@@ -474,14 +485,27 @@ export const SiteDetails = () => {
                   console.log('[SiteDetails] Diagnostic completed successfully, updating state');
                   completeDiagnostic(siteId);
                   
-                  setDiagnosticResult(response.data);
-                  setShowDiagnosticModal(true);
-                  addToast('AI diagnostic analysis completed', 'success');
+                  const diagnosticId = response.data.alarm_id || response.data.id;
+                  // Only show modal and toast if we haven't shown it for this diagnostic yet
+                  if (diagnosticId && !hasShownToast(diagnosticId)) {
+                    markToastShown(diagnosticId);
+                    setDiagnosticResult(response.data);
+                    setShowDiagnosticModal(true);
+                    // Show success toast notification with site context (global, but with site info)
+                    const siteName = selectedSite?.site_name || siteId;
+                    addToast(`AI diagnostic analysis completed for site: ${siteName}`, 'success');
+                  } else if (diagnosticId && hasShownToast(diagnosticId)) {
+                    // Toast already shown globally, but still show modal if on this page
+                    setDiagnosticResult(response.data);
+                    setShowDiagnosticModal(true);
+                  }
                 } else {
                   // Diagnostic failed
                   console.log('[SiteDetails] Diagnostic failed:', response.message);
                   completeDiagnostic(siteId);
-                  addToast(response.message || 'Failed to generate diagnostic', 'error');
+                  // Show error toast (global, but with site info)
+                  const siteName = selectedSite?.site_name || siteId;
+                  addToast(`Failed to generate diagnostic for site ${siteName}: ${response.message || 'Unknown error'}`, 'error');
                 }
               } catch (error: any) {
                 console.error('[SiteDetails] Error generating diagnostic:', error);
@@ -490,7 +514,9 @@ export const SiteDetails = () => {
                 // If unmounted, let polling mechanism handle it
                 if (isMountedRef.current && siteId) {
                   completeDiagnostic(siteId);
-                  addToast(error?.message || 'Failed to generate diagnostic', 'error');
+                  // Show error toast (global, but with site info)
+                  const siteName = selectedSite?.site_name || siteId;
+                  addToast(`Failed to generate diagnostic for site ${siteName}: ${error?.message || 'Unknown error'}`, 'error');
                 } else {
                   console.log('[SiteDetails] Component unmounted during error, state will be checked by polling');
                 }

@@ -346,7 +346,9 @@ export const Chart = ({
   }
 
   // Enhanced Pie chart
-  let currentAngle = 0;
+  // Start from top (-90 degrees) for standard pie chart orientation
+  const startOffset = -90;
+  let currentAngle = startOffset;
   const total = data.reduce((sum, item) => sum + item.value, 0);
   const pieSize = Math.min(height - (showLegend ? 60 : 20), 200);
   const radius = pieSize / 2 - 20;
@@ -373,23 +375,31 @@ export const Chart = ({
           </defs>
 
           {data.map((item, index) => {
-            const angle = (item.value / total) * 360;
+            // Calculate angle based on value proportion
+            const angle = total > 0 ? (item.value / total) * 360 : 0;
             const startAngle = currentAngle;
-            currentAngle += angle;
+            // For full circle (360 degrees), use 359.99 to avoid SVG arc issues
+            const actualAngle = Math.abs(angle - 360) < 0.01 ? 359.99 : angle;
+            const endAngle = currentAngle + actualAngle;
+            
+            // Update currentAngle for next slice
+            currentAngle = endAngle;
 
+            // Convert to radians
             const startAngleRad = (startAngle * Math.PI) / 180;
-            const endAngleRad = (currentAngle * Math.PI) / 180;
-            const largeArc = angle > 180 ? 1 : 0;
+            const endAngleRad = (endAngle * Math.PI) / 180;
+            const largeArc = actualAngle > 180 ? 1 : 0;
 
+            // Calculate arc endpoints
             const x1 = centerX + radius * Math.cos(startAngleRad);
             const y1 = centerY + radius * Math.sin(startAngleRad);
             const x2 = centerX + radius * Math.cos(endAngleRad);
             const y2 = centerY + radius * Math.sin(endAngleRad);
 
-            const midAngle = (startAngle + angle / 2) * Math.PI / 180;
-            const labelX = centerX + (radius + 15) * Math.cos(midAngle);
-            const labelY = centerY + (radius + 15) * Math.sin(midAngle);
-            const percentage = ((item.value / total) * 100).toFixed(1);
+            // Calculate mid angle for label positioning
+            const midAngle = (startAngle + actualAngle / 2) * Math.PI / 180;
+            // Calculate percentage - ensure it shows 100% when it's the only item
+            const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
 
             const isHovered = hoveredIndex === index;
             // Fix hover direction: always move outward from center
@@ -401,6 +411,12 @@ export const Chart = ({
             const hoverX2 = centerX + (radius + hoverOffset) * Math.cos(endAngleRad);
             const hoverY2 = centerY + (radius + hoverOffset) * Math.sin(endAngleRad);
 
+            // Determine sweep flag: use 1 for clockwise (standard for pie charts)
+            const sweepFlag = 1;
+
+            // Handle full circle case (single item with 100%)
+            const isFullCircle = Math.abs(angle - 360) < 0.01;
+
             return (
               <g 
                 key={index}
@@ -409,17 +425,32 @@ export const Chart = ({
                 className="cursor-pointer"
               >
                 {/* Pie slice */}
-                <path
-                  d={`M ${centerX} ${centerY} L ${isHovered ? hoverX1 : x1} ${isHovered ? hoverY1 : y1} A ${radius + hoverOffset} ${radius + hoverOffset} 0 ${largeArc} 1 ${isHovered ? hoverX2 : x2} ${isHovered ? hoverY2 : y2} Z`}
-                  fill={item.color || `hsl(${(index * 360) / data.length}, 70%, 50%)`}
-                  className="transition-all duration-300"
-                  style={{
-                    filter: isHovered ? `url(#${chartId}-pie-shadow)` : 'none',
-                    opacity: isHovered ? 1 : 0.9,
-                  }}
-                />
-                {/* Percentage label - moved further out to avoid overlap */}
-                {showLabels && angle > 10 && (
+                {isFullCircle ? (
+                  // Full circle - draw complete circle
+                  <circle
+                    cx={centerX}
+                    cy={centerY}
+                    r={radius + hoverOffset}
+                    fill={item.color || `hsl(${(index * 360) / data.length}, 70%, 50%)`}
+                    className="transition-all duration-300"
+                    style={{
+                      filter: isHovered ? `url(#${chartId}-pie-shadow)` : 'none',
+                      opacity: isHovered ? 1 : 0.9,
+                    }}
+                  />
+                ) : (
+                  <path
+                    d={`M ${centerX} ${centerY} L ${isHovered ? hoverX1 : x1} ${isHovered ? hoverY1 : y1} A ${radius + hoverOffset} ${radius + hoverOffset} 0 ${largeArc} ${sweepFlag} ${isHovered ? hoverX2 : x2} ${isHovered ? hoverY2 : y2} Z`}
+                    fill={item.color || `hsl(${(index * 360) / data.length}, 70%, 50%)`}
+                    className="transition-all duration-300"
+                    style={{
+                      filter: isHovered ? `url(#${chartId}-pie-shadow)` : 'none',
+                      opacity: isHovered ? 1 : 0.9,
+                    }}
+                  />
+                )}
+                {/* Percentage label - show for all slices, including full circle */}
+                {showLabels && (actualAngle > 10 || isFullCircle) && (
                   <text
                     x={centerX + (radius + 25) * Math.cos(midAngle)}
                     y={centerY + (radius + 25) * Math.sin(midAngle)}

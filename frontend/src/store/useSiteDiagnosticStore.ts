@@ -19,6 +19,8 @@ interface SiteDiagnosticState {
 interface SiteDiagnosticStore {
   // Map of siteId -> diagnostic state
   diagnostics: Record<string, SiteDiagnosticState>;
+  // Track shown diagnostic toasts to prevent duplicates
+  shownDiagnosticToasts: Set<string>;
   
   // Actions
   startDiagnostic: (siteId: string, diagnosticId?: string) => void;
@@ -26,12 +28,15 @@ interface SiteDiagnosticStore {
   getDiagnosticState: (siteId: string) => SiteDiagnosticState | null;
   isGeneratingForSite: (siteId: string) => boolean;
   clearDiagnostic: (siteId: string) => void;
+  hasShownToast: (diagnosticId: string) => boolean;
+  markToastShown: (diagnosticId: string) => void;
 }
 
 export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
   persist(
     (set, get) => ({
       diagnostics: {},
+      shownDiagnosticToasts: new Set<string>(),
 
       startDiagnostic: (siteId: string, diagnosticId?: string) => {
         set((state) => ({
@@ -95,10 +100,23 @@ export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
           return { diagnostics: newDiagnostics };
         });
       },
+
+      hasShownToast: (diagnosticId: string) => {
+        return get().shownDiagnosticToasts.has(diagnosticId);
+      },
+
+      markToastShown: (diagnosticId: string) => {
+        set((state) => {
+          const newSet = new Set(state.shownDiagnosticToasts);
+          newSet.add(diagnosticId);
+          return { shownDiagnosticToasts: newSet };
+        });
+      },
     }),
     {
       name: 'site-diagnostic-storage',
       // Only persist isGenerating and startTime, not diagnosticId (it's temporary)
+      // Don't persist shownDiagnosticToasts (reset on page reload)
       partialize: (state) => ({
         diagnostics: Object.fromEntries(
           Object.entries(state.diagnostics).map(([siteId, diagnostic]) => [
@@ -112,6 +130,7 @@ export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
             },
           ])
         ),
+        shownDiagnosticToasts: new Set<string>(), // Reset on persist
       }),
     }
   )

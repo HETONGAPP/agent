@@ -16,8 +16,10 @@ from ...agent.dependencies import (
     get_agent_service,
     get_site_manager,
     get_query_cache,
+    get_postgres_metadata_storage,
 )
 from ...agent.rate_limiter import rate_limit_dependency
+from ...agent.websocket_manager import WebSocketManager, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -591,6 +593,7 @@ def register_alarm_routes(app):
         alarm_id: str,
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
+        postgres_storage = Depends(get_postgres_metadata_storage),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
         """Generate diagnostic report for an alarm"""
@@ -705,6 +708,42 @@ def register_alarm_routes(app):
                             container.write_diagnostic(alarm.alarm_id, diagnostic_dict)
                             container.influx_client.flush()
                             logger.info(f"[generate_alarm_diagnostic] Successfully stored diagnostic to container for site {site_id}")
+                            
+                            # Also save to PostgreSQL for metadata storage
+                            if postgres_storage:
+                                try:
+                                    # Prepare diagnostic data for PostgreSQL
+                                    diagnostic_metadata = {
+                                        "alarm_id": alarm.alarm_id,
+                                        "risk_level": diagnostic_dict.get("risk_level", "Unknown"),
+                                        "diagnostic_name": diagnostic_dict.get("diagnostic_name", ""),
+                                        "metadata": diagnostic_dict.get("metadata", {}),
+                                    }
+                                    # Extract site_id, device_id, device_type, alarm_type from metadata if available
+                                    if "metadata" in diagnostic_dict:
+                                        metadata = diagnostic_dict["metadata"]
+                                        if metadata.get("site_id"):
+                                            diagnostic_metadata["site_id"] = metadata["site_id"]
+                                        if metadata.get("device_id"):
+                                            diagnostic_metadata["device_id"] = metadata["device_id"]
+                                        if metadata.get("device_type"):
+                                            diagnostic_metadata["device_type"] = metadata["device_type"]
+                                        if metadata.get("alarm_type"):
+                                            diagnostic_metadata["alarm_type"] = metadata["alarm_type"]
+                                    elif site_id:
+                                        diagnostic_metadata["site_id"] = site_id
+                                    
+                                    # Set timestamp
+                                    if "timestamp" in diagnostic_dict:
+                                        diagnostic_metadata["generated_at"] = diagnostic_dict["timestamp"]
+                                    
+                                    success = postgres_storage.save_diagnostic(diagnostic_metadata)
+                                    if success:
+                                        logger.info(f"Saved diagnostic {alarm.alarm_id} to PostgreSQL")
+                                    else:
+                                        logger.warning(f"Failed to save diagnostic {alarm.alarm_id} to PostgreSQL")
+                                except Exception as e:
+                                    logger.warning(f"Failed to save diagnostic to PostgreSQL: {e}")
                         else:
                             # Fallback to direct influx_client
                             diagnostic_dict = diagnostic_report.to_dict()
@@ -722,6 +761,42 @@ def register_alarm_routes(app):
                                 diagnostic_dict["timestamp"] = datetime.now(UTC)
                             influx_client.write_diagnostic(alarm.alarm_id, diagnostic_dict, site_id=site_id, flush=True)
                             logger.info(f"[generate_alarm_diagnostic] Successfully stored diagnostic to InfluxDB (fallback) for site {site_id}")
+                            
+                            # Also save to PostgreSQL for metadata storage
+                            if postgres_storage:
+                                try:
+                                    # Prepare diagnostic data for PostgreSQL
+                                    diagnostic_metadata = {
+                                        "alarm_id": alarm.alarm_id,
+                                        "risk_level": diagnostic_dict.get("risk_level", "Unknown"),
+                                        "diagnostic_name": diagnostic_dict.get("diagnostic_name", ""),
+                                        "metadata": diagnostic_dict.get("metadata", {}),
+                                    }
+                                    # Extract site_id, device_id, device_type, alarm_type from metadata if available
+                                    if "metadata" in diagnostic_dict:
+                                        metadata = diagnostic_dict["metadata"]
+                                        if metadata.get("site_id"):
+                                            diagnostic_metadata["site_id"] = metadata["site_id"]
+                                        if metadata.get("device_id"):
+                                            diagnostic_metadata["device_id"] = metadata["device_id"]
+                                        if metadata.get("device_type"):
+                                            diagnostic_metadata["device_type"] = metadata["device_type"]
+                                        if metadata.get("alarm_type"):
+                                            diagnostic_metadata["alarm_type"] = metadata["alarm_type"]
+                                    elif site_id:
+                                        diagnostic_metadata["site_id"] = site_id
+                                    
+                                    # Set timestamp
+                                    if "timestamp" in diagnostic_dict:
+                                        diagnostic_metadata["generated_at"] = diagnostic_dict["timestamp"]
+                                    
+                                    success = postgres_storage.save_diagnostic(diagnostic_metadata)
+                                    if success:
+                                        logger.info(f"Saved diagnostic {alarm.alarm_id} to PostgreSQL")
+                                    else:
+                                        logger.warning(f"Failed to save diagnostic {alarm.alarm_id} to PostgreSQL")
+                                except Exception as e:
+                                    logger.warning(f"Failed to save diagnostic to PostgreSQL: {e}")
                     else:
                         # Direct influx_client
                         diagnostic_dict = diagnostic_report.to_dict()
@@ -739,8 +814,65 @@ def register_alarm_routes(app):
                             diagnostic_dict["timestamp"] = datetime.now(UTC)
                         influx_client.write_diagnostic(alarm.alarm_id, diagnostic_dict, site_id=site_id, flush=True)
                         logger.info(f"[generate_alarm_diagnostic] Successfully stored diagnostic to InfluxDB (direct) for site {site_id}")
+                    
+                    # Also save to PostgreSQL for metadata storage
+                    if postgres_storage:
+                        try:
+                            # Prepare diagnostic data for PostgreSQL
+                            diagnostic_metadata = {
+                                "alarm_id": alarm.alarm_id,
+                                "risk_level": diagnostic_dict.get("risk_level", "Unknown"),
+                                "diagnostic_name": diagnostic_dict.get("diagnostic_name", ""),
+                                "metadata": diagnostic_dict.get("metadata", {}),
+                            }
+                            # Extract site_id, device_id, device_type, alarm_type from metadata if available
+                            if "metadata" in diagnostic_dict:
+                                metadata = diagnostic_dict["metadata"]
+                                if metadata.get("site_id"):
+                                    diagnostic_metadata["site_id"] = metadata["site_id"]
+                                if metadata.get("device_id"):
+                                    diagnostic_metadata["device_id"] = metadata["device_id"]
+                                if metadata.get("device_type"):
+                                    diagnostic_metadata["device_type"] = metadata["device_type"]
+                                if metadata.get("alarm_type"):
+                                    diagnostic_metadata["alarm_type"] = metadata["alarm_type"]
+                            elif site_id:
+                                diagnostic_metadata["site_id"] = site_id
+                            
+                            # Set timestamp
+                            if "timestamp" in diagnostic_dict:
+                                diagnostic_metadata["generated_at"] = diagnostic_dict["timestamp"]
+                            
+                            success = postgres_storage.save_diagnostic(diagnostic_metadata)
+                            if success:
+                                logger.info(f"Saved diagnostic {alarm.alarm_id} to PostgreSQL")
+                            else:
+                                logger.warning(f"Failed to save diagnostic {alarm.alarm_id} to PostgreSQL")
+                        except Exception as e:
+                            logger.warning(f"Failed to save diagnostic to PostgreSQL: {e}")
                 except Exception as e:
                     logger.error(f"Failed to store diagnostic: {e}", exc_info=True)
+            
+            # Broadcast diagnostic_created event via WebSocket
+            from ...agent.dependencies import get_app_state
+            app_state = get_app_state()
+            websocket_manager = app_state.get("websocket_manager") if app_state else None
+            if websocket_manager:
+                try:
+                    diagnostic_dict = diagnostic_report.to_dict() if hasattr(diagnostic_report, 'to_dict') else diagnostic_report
+                    site_id = alarm.metadata.get("site_id") if alarm.metadata else None
+                    await websocket_manager.broadcast(
+                        EventType.DIAGNOSTIC_CREATED,
+                        {
+                            "alarm_id": alarm.alarm_id,
+                            "site_id": site_id,
+                            "id": alarm.alarm_id,
+                            "diagnostic": diagnostic_dict,
+                        }
+                    )
+                    logger.info(f"Broadcasted diagnostic_created event for {alarm.alarm_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to broadcast diagnostic_created event: {e}")
             
             return {
                 "status": "success",

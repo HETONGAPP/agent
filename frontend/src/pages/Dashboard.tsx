@@ -11,6 +11,7 @@ import { useAlarms } from '@/hooks/useAlarms';
 import { useDiagnostics } from '@/hooks/useDiagnostics';
 import { useRealtime } from '@/hooks/useRealtime';
 import { useWebSocket, type EventType } from '@/hooks/useWebSocket';
+import { websocketEventManager } from '@/services/websocketEventManager';
 import { formatNumber } from '@/utils/format';
 import { Plug, Bell, FileText, AlertTriangle, Cpu, HardDrive, Network, Cloud } from 'lucide-react';
 import { getSystemMetrics, type SystemMetrics } from '@/api/metrics';
@@ -19,7 +20,7 @@ import { getWeather, type WeatherData } from '@/api/weather';
 export const Dashboard = () => {
   const { stats: deviceStats, fetchStats: fetchDeviceStats } = useDevices(false);
   const { stats: alarmStats, fetchStats: fetchAlarmStats } = useAlarms(false);
-  const { stats: diagnosticStats, fetchStats: fetchDiagnosticStats } = useDiagnostics(false);
+  const { stats: diagnosticStats, fetchStats: fetchDiagnosticStats, diagnostics, fetchDiagnostics, loading: loadingDiagnostics } = useDiagnostics(false);
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -86,6 +87,8 @@ export const Dashboard = () => {
     fetchDeviceStats();
     fetchAlarmStats();
     fetchDiagnosticStats();
+    // Fetch diagnostics list for real-time risk level distribution
+    fetchDiagnostics(undefined, 1000, 0); // Fetch up to 1000 diagnostics for accurate distribution
     fetchSystemMetrics();
     // Weather will be fetched when userLocation is available
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,33 +102,146 @@ export const Dashboard = () => {
   }, [userLocation, fetchWeather]);
 
   // WebSocket for real-time updates
-  const wsEvents: EventType[] = ['alarm_created', 'alarm_updated', 'stats_updated'];
+  const wsEvents: EventType[] = [
+    'device_added',
+    'device_removed',
+    'device_updated',
+    'device_status_changed',
+    'alarm_created',
+    'alarm_updated',
+    'stats_updated',
+    'diagnostic_created',
+  ];
   const { connected } = useWebSocket({
     enabled: true,
     events: wsEvents,
     onMessage: useCallback((message: { type: EventType; data?: any }) => {
-      // Refresh stats when alarms are created/updated or stats are updated
-      if (message.type === 'alarm_created' || message.type === 'alarm_updated' || message.type === 'stats_updated') {
+      // Refresh stats when any relevant event occurs
+      const shouldRefresh = 
+        message.type === 'device_added' ||
+        message.type === 'device_removed' ||
+        message.type === 'device_updated' ||
+        message.type === 'device_status_changed' ||
+        message.type === 'alarm_created' ||
+        message.type === 'alarm_updated' ||
+        message.type === 'stats_updated' ||
+        message.type === 'diagnostic_created';
+      
+      if (shouldRefresh) {
+        // For diagnostic_created, refresh list immediately (no delay needed for list)
+        if (message.type === 'diagnostic_created') {
+          // Refresh diagnostics list immediately for real-time distribution
+          fetchDiagnostics(undefined, 1000, 0);
+          // Stats can wait a bit for backend processing
+          setTimeout(() => {
+            fetchDiagnosticStats(undefined, undefined, undefined, true);
+          }, 1000);
+        } else if (message.type === 'stats_updated') {
+          // Force update diagnostic stats to bypass cache
+          setTimeout(() => {
+            fetchDiagnosticStats(undefined, undefined, undefined, true);
+            fetchDiagnostics(undefined, 1000, 0);
+          }, 1000);
+        } else {
+          fetchDiagnosticStats();
+        }
         fetchAlarmStats();
-        fetchDiagnosticStats();
         fetchDeviceStats();
       }
-    }, [fetchAlarmStats, fetchDiagnosticStats, fetchDeviceStats]),
+    }, [fetchAlarmStats, fetchDiagnosticStats, fetchDeviceStats, fetchDiagnostics]),
     onConnect: useCallback(() => {
       fetchDeviceStats();
       fetchAlarmStats();
       fetchDiagnosticStats();
-    }, [fetchDeviceStats, fetchAlarmStats, fetchDiagnosticStats]),
+      fetchDiagnostics(undefined, 1000, 0);
+    }, [fetchDeviceStats, fetchAlarmStats, fetchDiagnosticStats, fetchDiagnostics]),
   });
+
+  // Subscribe to WebSocket events via event manager for real-time updates
+  useEffect(() => {
+    if (!connected) return;
+
+    // Debounce timer for stats refresh
+    let statsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    
+    const debouncedRefreshStats = () => {
+      if (statsRefreshTimer) {
+        clearTimeout(statsRefreshTimer);
+      }
+      // Add delay to ensure backend has processed the update
+      statsRefreshTimer = setTimeout(() => {
+        // Force update to bypass any client-side caching
+        fetchDiagnosticStats(undefined, undefined, undefined, true);
+        fetchAlarmStats();
+        fetchDeviceStats();
+        fetchDiagnostics(undefined, 1000, 0);
+      }, 1000); // 1 second delay to ensure backend processing is complete
+    };
+
+    const refreshAllStats = () => {
+      fetchDiagnosticStats(undefined, undefined, undefined, true);
+      fetchAlarmStats();
+      fetchDeviceStats();
+      fetchDiagnostics(undefined, 1000, 0);
+    };
+
+    const unsubscribeDeviceAdded = websocketEventManager.subscribe('device_added', debouncedRefreshStats);
+    const unsubscribeDeviceRemoved = websocketEventManager.subscribe('device_removed', debouncedRefreshStats);
+    const unsubscribeDeviceUpdated = websocketEventManager.subscribe('device_updated', debouncedRefreshStats);
+    const unsubscribeDeviceStatusChanged = websocketEventManager.subscribe('device_status_changed', debouncedRefreshStats);
+    const unsubscribeAlarmCreated = websocketEventManager.subscribe('alarm_created', debouncedRefreshStats);
+    const unsubscribeAlarmUpdated = websocketEventManager.subscribe('alarm_updated', debouncedRefreshStats);
+    const unsubscribeDiagnosticCreated = websocketEventManager.subscribe('diagnostic_created', (data) => {
+      console.log('[Dashboard] Diagnostic created, refreshing stats:', data);
+      // Refresh diagnostics list immediately for real-time distribution (no delay for list)
+      // This ensures the list is updated as soon as possible
+      fetchDiagnostics(undefined, 1000, 0);
+      // Also refresh stats with delay to ensure backend processing is complete
+      debouncedRefreshStats();
+    });
+    const unsubscribeStatsUpdated = websocketEventManager.subscribe('stats_updated', () => {
+      console.log('[Dashboard] Stats updated, refreshing stats');
+      refreshAllStats();
+    });
+
+    return () => {
+      if (statsRefreshTimer) {
+        clearTimeout(statsRefreshTimer);
+      }
+      unsubscribeDeviceAdded();
+      unsubscribeDeviceRemoved();
+      unsubscribeDeviceUpdated();
+      unsubscribeDeviceStatusChanged();
+      unsubscribeAlarmCreated();
+      unsubscribeAlarmUpdated();
+      unsubscribeDiagnosticCreated();
+      unsubscribeStatsUpdated();
+    };
+  }, [connected, fetchDiagnosticStats, fetchAlarmStats, fetchDeviceStats, fetchDiagnostics]);
 
   // Fallback polling (only when WebSocket is not connected)
   useRealtime({
     enabled: !connected,
-    interval: 60000, // 60 seconds
+    interval: 30000, // 30 seconds - more frequent for better real-time feel
     onUpdate: () => {
       fetchDeviceStats();
       fetchAlarmStats();
       fetchDiagnosticStats();
+      // Also refresh diagnostics list for real-time distribution
+      fetchDiagnostics(undefined, 1000, 0);
+    },
+  });
+  
+  // Additional polling for diagnostics list even when WebSocket is connected
+  // This ensures the list stays up-to-date even if WebSocket events are missed
+  useRealtime({
+    enabled: true, // Always enabled for diagnostics list
+    interval: 60000, // 60 seconds - less frequent to avoid overload
+    onUpdate: () => {
+      if (!loadingDiagnostics) {
+        // Silently refresh diagnostics list to keep it current
+        fetchDiagnostics(undefined, 1000, 0, true);
+      }
     },
   });
 
@@ -161,18 +277,51 @@ export const Dashboard = () => {
       }))
     : [];
 
-  const diagnosticChartData = diagnosticStats
-    ? Object.entries(diagnosticStats.by_risk_level || {}).map(([label, value]) => ({
-        label,
-        value: value as number,
-        color:
-          label === 'High'
-            ? '#DC2626'
-            : label === 'Medium'
-            ? '#EA580C'
-            : '#16A34A',
-      }))
-    : [];
+  // Calculate risk level distribution from diagnostics list (real-time, no cache)
+  const diagnosticChartData = (() => {
+    if (!diagnostics || diagnostics.length === 0) {
+      // Fallback to stats if diagnostics list is not available yet
+      if (diagnosticStats?.by_risk_level) {
+        const byRiskLevel = diagnosticStats.by_risk_level || {};
+        const normalized: Record<string, number> = {};
+        Object.entries(byRiskLevel).forEach(([key, value]) => {
+          const normalizedKey = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+          normalized[normalizedKey] = (normalized[normalizedKey] || 0) + (value as number);
+        });
+        return Object.entries(normalized).map(([label, value]) => ({
+          label,
+          value: value as number,
+          color:
+            label === 'High'
+              ? '#DC2626'
+              : label === 'Medium'
+              ? '#EA580C'
+              : '#16A34A',
+        }));
+      }
+      return [];
+    }
+    
+    // Calculate distribution from diagnostics list
+    const riskLevelCounts: Record<string, number> = {};
+    diagnostics.forEach((diagnostic) => {
+      const riskLevel = diagnostic?.risk_level || (diagnostic as any)?.risk_level || 'Unknown';
+      const normalizedKey = String(riskLevel).charAt(0).toUpperCase() + String(riskLevel).slice(1).toLowerCase();
+      riskLevelCounts[normalizedKey] = (riskLevelCounts[normalizedKey] || 0) + 1;
+    });
+    
+    // Map to chart data with consistent labels and colors
+    return Object.entries(riskLevelCounts).map(([label, value]) => ({
+      label,
+      value: value as number,
+      color:
+        label === 'High'
+          ? '#DC2626'
+          : label === 'Medium'
+          ? '#EA580C'
+          : '#16A34A',
+    }));
+  })();
 
   return (
     <div className="space-y-6">
@@ -236,7 +385,7 @@ export const Dashboard = () => {
         />
         <StatCard
           title="Diagnostic Reports"
-          value={formatNumber(diagnosticStats?.total || 0)}
+          value={formatNumber(diagnostics?.length || diagnosticStats?.total || 0)}
           icon={FileText}
           color="purple"
         />
@@ -275,7 +424,7 @@ export const Dashboard = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-white">Risk Level Distribution</h2>
             <div className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">
-              {diagnosticStats?.total || 0} Reports
+              {diagnostics?.length || diagnosticStats?.total || 0} Reports
             </div>
           </div>
           {diagnosticChartData.length > 0 ? (

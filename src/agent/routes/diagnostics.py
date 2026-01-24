@@ -234,12 +234,14 @@ def register_diagnostic_routes(app):
                         if container:
                             # Limit to 500 per container for stats (much faster than 10000)
                             # Statistics don't need all records, just enough for accurate counts
+                            # Disable deduplication for stats to get accurate counts
                             return container.query_diagnostics(
                                 start_time=start_time,
                                 end_time=end_time,
                                 risk_level=risk_level,
                                 device_type=device_type,
                                 limit=500,  # Reduced from 10000 for better performance
+                                deduplicate=False,  # Don't deduplicate for stats - we want accurate counts
                             )
                     except Exception as e:
                         logger.warning(f"Failed to query diagnostics from container {container_site_id} for stats: {e}")

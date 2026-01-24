@@ -27,22 +27,28 @@ interface DiagnosticOutputProps {
 const RiskLevelBadge = ({ level }: { level: string }) => {
   const config = {
     High: {
-      bg: 'bg-red-500/20',
-      text: 'text-red-400',
-      border: 'border-red-500/50',
+      bg: 'bg-red-500/30',
+      text: 'text-red-300',
+      border: 'border-2 border-red-500',
       icon: AlertCircle,
+      shadow: 'shadow-lg shadow-red-500/30',
+      glow: 'ring-2 ring-red-500/50',
     },
     Medium: {
       bg: 'bg-amber-500/20',
       text: 'text-amber-400',
-      border: 'border-amber-500/50',
+      border: 'border border-amber-500/50',
       icon: AlertTriangle,
+      shadow: '',
+      glow: '',
     },
     Low: {
       bg: 'bg-green-500/20',
       text: 'text-green-400',
-      border: 'border-green-500/50',
+      border: 'border border-green-500/50',
       icon: CheckCircle2,
+      shadow: '',
+      glow: '',
     },
   };
 
@@ -50,9 +56,11 @@ const RiskLevelBadge = ({ level }: { level: string }) => {
   const Icon = style.icon;
 
   return (
-    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border ${style.bg} ${style.border} ${style.text}`}>
-      <Icon size={18} />
-      <span className="font-semibold text-sm">{level}</span>
+    <div className={`inline-flex items-center gap-2.5 px-5 py-2.5 rounded-lg ${style.bg} ${style.border} ${style.text} ${style.shadow} ${style.glow} ${
+      level === 'High' ? 'font-bold' : 'font-semibold'
+    }`}>
+      <Icon size={level === 'High' ? 20 : 18} className={level === 'High' ? 'animate-pulse' : ''} />
+      <span className={`${level === 'High' ? 'text-base' : 'text-sm'}`}>{level}</span>
     </div>
   );
 };
@@ -244,20 +252,75 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
 
         {report && (
           <div id="diagnostic-report-content" className="space-y-6">
-            {/* Risk Level - Prominent Display */}
+            {/* Risk Level - Professional Display */}
             {report.risk_level && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center justify-between glass-dark rounded-xl p-5 border border-zinc-700/50"
+                className={`rounded-xl border-2 overflow-hidden ${
+                  report.risk_level === 'High' 
+                    ? 'bg-gradient-to-br from-red-950/40 via-red-900/30 to-red-950/40 border-red-500/60 shadow-lg shadow-red-500/20' 
+                    : report.risk_level === 'Medium'
+                    ? 'bg-gradient-to-br from-amber-950/40 via-amber-900/30 to-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-500/20'
+                    : 'bg-gradient-to-br from-green-950/40 via-green-900/30 to-green-950/40 border-green-500/60 shadow-lg shadow-green-500/20'
+                }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-lg bg-zinc-800/50">
-                    <Shield size={24} className="text-zinc-400" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-400 mb-1 uppercase tracking-wide">Risk Assessment</div>
-                    <RiskLevelBadge level={report.risk_level} />
+                <div className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      {/* Icon Section */}
+                      <div className={`p-4 rounded-xl ${
+                        report.risk_level === 'High'
+                          ? 'bg-red-500/20 border-2 border-red-500/50'
+                          : report.risk_level === 'Medium'
+                          ? 'bg-amber-500/20 border-2 border-amber-500/50'
+                          : 'bg-green-500/20 border-2 border-green-500/50'
+                      }`}>
+                        {report.risk_level === 'High' ? (
+                          <AlertCircle size={28} className="text-red-400" />
+                        ) : report.risk_level === 'Medium' ? (
+                          <AlertTriangle size={28} className="text-amber-400" />
+                        ) : (
+                          <Shield size={28} className="text-green-400" />
+                        )}
+                      </div>
+                      
+                      {/* Content Section */}
+                      <div className="flex-1">
+                        <div className="text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">
+                          Risk Assessment
+                        </div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <RiskLevelBadge level={report.risk_level} />
+                          {report.risk_level === 'High' && (
+                            <span className="px-3 py-1 text-xs font-semibold bg-red-500/30 text-red-300 border border-red-500/50 rounded-full animate-pulse">
+                              Immediate Attention Required
+                            </span>
+                          )}
+                        </div>
+                        {report.risk_level === 'High' && (
+                          <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                            <p className="text-sm text-red-200 leading-relaxed">
+                              <strong className="font-semibold">Critical Risk Detected:</strong> This site requires immediate investigation and corrective action. Please review the root causes and recommended actions below.
+                            </p>
+                          </div>
+                        )}
+                        {report.risk_level === 'Medium' && (
+                          <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                            <p className="text-sm text-amber-200 leading-relaxed">
+                              <strong className="font-semibold">Moderate Risk:</strong> This site should be monitored closely. Review the analysis below for potential issues.
+                            </p>
+                          </div>
+                        )}
+                        {report.risk_level === 'Low' && (
+                          <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                            <p className="text-sm text-green-200 leading-relaxed">
+                              <strong className="font-semibold">Low Risk:</strong> System appears to be operating normally. Continue routine monitoring.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </motion.div>

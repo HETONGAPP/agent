@@ -224,6 +224,12 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
         condition_value: '',
         severity: 'Warning',
         priority: '5',
+        actions: [
+          { name: 'trigger_llm_diagnostic', enabled: true },
+          { name: 'send_email', enabled: false },
+          { name: 'notify_engineer', enabled: false },
+          { name: 'log_alarm', enabled: true },
+        ],
       };
     }
     
@@ -243,6 +249,34 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
       device_id = initialRule.device_id;
     }
     
+    // Parse actions from initialRule
+    let actions = [
+      { name: 'trigger_llm_diagnostic', enabled: true },
+      { name: 'send_email', enabled: false },
+      { name: 'notify_engineer', enabled: false },
+      { name: 'log_alarm', enabled: true },
+    ];
+    
+    if (initialRule.actions && Array.isArray(initialRule.actions)) {
+      // Map existing actions to our format
+      const actionMap = new Map();
+      initialRule.actions.forEach((action: any) => {
+        if (typeof action === 'string') {
+          actionMap.set(action, { name: action, enabled: true });
+        } else if (action.name) {
+          actionMap.set(action.name, { name: action.name, enabled: action.enabled !== false });
+        }
+      });
+      
+      // Update default actions with existing values
+      actions = actions.map(defaultAction => {
+        if (actionMap.has(defaultAction.name)) {
+          return actionMap.get(defaultAction.name);
+        }
+        return defaultAction;
+      });
+    }
+    
     return {
       id: initialRule.id || '',
       name: initialRule.name || '',
@@ -255,6 +289,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
       condition_value: initialRule.condition?.value?.toString() || '',
       severity: initialRule.severity || 'Warning',
       priority: initialRule.priority?.toString() || '5',
+      actions: actions,
     };
   };
   
@@ -287,6 +322,14 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
       }
       if (formData.device_id) {
         ruleData.device_ids = [formData.device_id];
+      }
+      
+      // Add actions (include all actions with enabled status)
+      if (formData.actions && Array.isArray(formData.actions)) {
+        ruleData.actions = formData.actions.map((action: any) => ({
+          name: action.name,
+          enabled: action.enabled,
+        }));
       }
 
       // If editing, pass ruleData to onSuccess callback (parent will handle API call)
@@ -573,6 +616,34 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
             placeholder="5"
           />
         </div>
+      </div>
+
+      <div className="border-t border-gray-700 pt-4">
+        <h4 className="text-sm font-medium text-gray-300 mb-3">Actions</h4>
+        <div className="space-y-2">
+          {formData.actions && formData.actions.map((action: any, index: number) => (
+            <div key={action.name} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={action.enabled}
+                  onChange={(e) => {
+                    const newActions = [...formData.actions];
+                    newActions[index] = { ...action, enabled: e.target.checked };
+                    setFormData({ ...formData, actions: newActions });
+                  }}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                />
+                <label className="text-sm text-gray-300 capitalize">
+                  {action.name.replace(/_/g, ' ')}
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Select which actions should be executed when this rule is triggered
+        </p>
       </div>
 
       <div className="flex justify-between items-center pt-4">

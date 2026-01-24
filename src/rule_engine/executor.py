@@ -48,8 +48,26 @@ class RuleExecutor:
         results = {}
 
         for action in actions:
-            action_name = action if isinstance(action, str) else action.get("name", "")
-            action_params = {} if isinstance(action, str) else action.get("params", {})
+            # Handle both string and object formats
+            if isinstance(action, str):
+                action_name = action
+                action_enabled = True  # Default to enabled for string format
+                action_params = {}
+            else:
+                action_name = action.get("name", "")
+                # Check if action is enabled (default to True if not specified)
+                action_enabled = action.get("enabled", True)
+                action_params = action.get("params", {})
+            
+            # Skip disabled actions
+            if not action_enabled:
+                logger.debug(f"Skipping disabled action: {action_name}")
+                results[action_name] = {
+                    "success": False,
+                    "skipped": True,
+                    "reason": "Action is disabled",
+                }
+                continue
 
             try:
                 result = self._execute_action(action_name, alarm, device_data, rule, action_params)

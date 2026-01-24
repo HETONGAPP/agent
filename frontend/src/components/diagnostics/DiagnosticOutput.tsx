@@ -332,22 +332,20 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
               </SectionCard>
             )}
 
-            {/* Recommended Actions - Card Grid Layout */}
+            {/* Recommended Actions - Simple Grid Layout */}
             {report.recommended_actions && report.recommended_actions.length > 0 && (
               <SectionCard icon={Lightbulb} title="Recommended Actions">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {report.recommended_actions.map((action: string, index: number) => (
                     <motion.div
                       key={index}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:border-green-500/50 hover:bg-zinc-800/70 transition-all duration-200"
+                      className="flex items-start gap-3"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-                        <p className="text-sm text-zinc-300 leading-relaxed">{action}</p>
-                      </div>
+                      <div className="mt-0.5 w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                      <p className="text-sm text-zinc-300 leading-relaxed">{action}</p>
                     </motion.div>
                   ))}
                 </div>

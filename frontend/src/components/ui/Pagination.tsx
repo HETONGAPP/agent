@@ -35,13 +35,7 @@ export const Pagination = ({
 
   return (
     <div className="flex items-center justify-between mt-4">
-      {safeTotalItems > 0 && (
-        <div className="text-sm text-gray-400">
-          Showing {startItem} to {endItem} of {safeTotalItems} items
-        </div>
-      )}
-      
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-2">
         <Button
           variant="secondary"
           size="sm"
@@ -51,6 +45,10 @@ export const Pagination = ({
           Previous
         </Button>
         
+        <span className="text-sm text-gray-300 px-4">
+          Page {safeCurrentPage} of {safeTotalPages}
+        </span>
+        
         <Button
           variant="secondary"
           size="sm"
@@ -59,11 +57,13 @@ export const Pagination = ({
         >
           Next
         </Button>
-        
-        <span className="text-sm text-gray-300 px-4">
-          Page {safeCurrentPage} of {safeTotalPages}
-        </span>
       </div>
+      
+      {safeTotalItems > 0 && (
+        <div className="text-sm text-gray-400">
+          Showing {startItem} to {endItem} of {safeTotalItems} items
+        </div>
+      )}
     </div>
   );
 };

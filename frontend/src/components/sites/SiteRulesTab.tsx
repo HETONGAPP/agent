@@ -3,12 +3,13 @@
  * Displays and manages site rules
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { AlertCircle, Edit, Trash2, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { FilterBar } from '@/components/ui/FilterBar';
+import { Pagination } from '@/components/ui/Pagination';
 import { deleteSiteRule } from '@/api/sites';
 
 // All supported device types
@@ -57,6 +58,8 @@ export const SiteRulesTab = ({
 }: SiteRulesTabProps) => {
   const [selectedDeviceType, setSelectedDeviceType] = useState<string>('');
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const itemsPerPage = 15;
   
   const siteRulesData = siteId ? (siteRules[siteId] || null) : null;
   const deviceRules = siteRulesData?.devices || [];
@@ -152,6 +155,24 @@ export const SiteRulesTab = ({
     
     return filtered;
   }, [allRulesTableData, selectedDeviceType, selectedDeviceId]);
+
+  // Paginate filtered rules
+  const paginatedRules = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return rulesTableData.slice(startIndex, endIndex);
+  }, [rulesTableData, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(rulesTableData.length / itemsPerPage);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDeviceType, selectedDeviceId]);
+  
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
   
   const handleClearFilters = () => {
     setSelectedDeviceType('');
@@ -501,7 +522,20 @@ export const SiteRulesTab = ({
         </div>
       </FilterBar>
       
-      <DataTable data={rulesTableData} columns={rulesColumns} />
+      <DataTable data={paginatedRules} columns={rulesColumns} />
+      
+      {/* Pagination */}
+      {rulesTableData.length > 0 && (
+        <div className="mt-4">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={rulesTableData.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+          />
+        </div>
+      )}
     </div>
   );
 };

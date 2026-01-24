@@ -7,17 +7,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAlarms } from '@/hooks/useAlarms';
 import { useWebSocket, EventType } from '@/hooks/useWebSocket';
 import { DataTable, Column } from '@/components/ui/DataTable';
-import { SearchInput } from '@/components/ui/SearchInput';
 import { Pagination } from '@/components/ui/Pagination';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { FilterBar } from '@/components/ui/FilterBar';
 import { Alarm, AlarmFilters } from '@/types';
 import { ALARM_SEVERITY } from '@/config/constants';
 import { formatRelativeTime } from '@/utils/date';
 import { exportAlarms } from '@/utils/export';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
-import { MapPin, Brain } from 'lucide-react';
+import { MapPin, Brain, Filter, AlertTriangle } from 'lucide-react';
 import { generateAlarmDiagnostic } from '@/api/diagnostics';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { websocketEventManager } from '@/services/websocketEventManager';
@@ -29,7 +29,6 @@ interface SiteAlarmsTabProps {
 export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
   const {
     alarms,
-    stats,
     pagination,
     loading,
     error,
@@ -42,7 +41,6 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
   const { addToast } = useToastStore();
   const [filters, setLocalFilters] = useState<AlarmFilters>({ site_id: siteId });
   const [selectedSeverity, setSelectedSeverity] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [generatingDiagnostics, setGeneratingDiagnostics] = useState<Set<string>>(new Set());
   
   // WebSocket for real-time updates
@@ -63,10 +61,12 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
     const initialFilters = { site_id: siteId };
     setFilters(initialFilters);
     setLocalFilters(initialFilters);
+    // Set pagination limit to 15
+    setPagination({ ...pagination, limit: 15 });
     // When querying a specific site, don't use aggregate_by_site (we want all alarms)
-    fetchAlarms(initialFilters, pagination.limit, 0, false);
+    fetchAlarms(initialFilters, 15, 0, false);
     fetchStats();
-  }, [siteId, setFilters, fetchAlarms, fetchStats, pagination.limit]);
+  }, [siteId, setFilters, fetchAlarms, fetchStats, setPagination]);
 
   // Handle WebSocket events
   useEffect(() => {
@@ -83,7 +83,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
         
         if (alarmSiteId === siteId || (isRuleUpdate && eventSiteId === siteId)) {
           // When querying a specific site, don't use aggregate_by_site (we want all alarms)
-          fetchAlarms(filters, pagination.limit, pagination.offset, false);
+          fetchAlarms(filters, 15, pagination.offset, false);
           fetchStats();
         }
       } else if (event.type === EventType.STATS_UPDATED) {
@@ -92,7 +92,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
           fetchStats();
           // Also refresh alarms if it's a rule-related update for this site
           if (isRuleUpdate && eventSiteId === siteId) {
-            fetchAlarms(filters, pagination.limit, pagination.offset, false);
+            fetchAlarms(filters, 15, pagination.offset, false);
           }
         }
       }
@@ -106,25 +106,22 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
     if (!siteId) return;
     const newFilters: AlarmFilters = { site_id: siteId };
     if (selectedSeverity) newFilters.severity = selectedSeverity as any;
-    if (searchQuery) {
-      // Search in alarm_id, alarm_type, or source
-      newFilters.alarm_type = searchQuery;
-    }
     setLocalFilters(newFilters);
     setFilters(newFilters);
     // When querying a specific site, don't use aggregate_by_site (we want all alarms)
-    fetchAlarms(newFilters, pagination.limit, 0, false);
-  }, [selectedSeverity, searchQuery, siteId, setFilters, fetchAlarms, pagination.limit]);
+    fetchAlarms(newFilters, 15, 0, false);
+  }, [selectedSeverity, siteId, setFilters, fetchAlarms]);
 
   const handleSeverityFilter = (severity: string) => {
-    setSelectedSeverity(severity === selectedSeverity ? '' : severity);
+    setSelectedSeverity(severity);
   };
 
   const handlePageChange = (page: number) => {
-    const offset = (page - 1) * pagination.limit;
-    setPagination({ ...pagination, offset });
+    const limit = 15;
+    const offset = (page - 1) * limit;
+    setPagination({ ...pagination, limit, offset });
     // When querying a specific site, don't use aggregate_by_site (we want all alarms)
-    fetchAlarms(filters, pagination.limit, offset, false);
+    fetchAlarms(filters, limit, offset, false);
   };
 
   const handleGenerateDiagnostic = async (alarmId: string) => {
@@ -134,7 +131,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
       if (response.status === 'success') {
         addToast('Diagnostic generated successfully', 'success');
         // Refresh alarms to get updated diagnostic
-        fetchAlarms(filters, pagination.limit, pagination.offset, false);
+        fetchAlarms(filters, 15, pagination.offset, false);
       } else {
         addToast(response.message || 'Failed to generate diagnostic', 'error');
       }
@@ -177,19 +174,16 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
       header: 'Level',
       render: (alarm) => {
         const level = (alarm as any).alarm_level || 'device_level';
-        const levelMap: Record<string, { label: string; color: string }> = {
-          system_level: { label: 'System', color: 'purple' },
-          site_level: { label: 'Site', color: 'blue' },
-          device_level: { label: 'Device', color: 'gray' },
+        const levelMap: Record<string, { label: string; colorClass: string }> = {
+          system_level: { label: 'System', colorClass: 'bg-purple-500/20 text-purple-400 border-purple-500/50' },
+          site_level: { label: 'Site', colorClass: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
+          device_level: { label: 'Device', colorClass: 'bg-gray-500/20 text-gray-400 border-gray-500/50' },
         };
         const levelInfo = levelMap[level] || levelMap.device_level;
         return (
-          <Badge
-            type="custom"
-            value={levelInfo.label}
-            className={`bg-${levelInfo.color}-500/10 text-${levelInfo.color}-400 border-${levelInfo.color}-500/20`}
-            size="sm"
-          />
+          <span className={`badge border px-2 py-0.5 text-xs ${levelInfo.colorClass}`}>
+            {levelInfo.label}
+          </span>
         );
       },
     },
@@ -247,84 +241,73 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="card p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <SearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder="Search alarms..."
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {Object.entries(ALARM_SEVERITY).map(([key, value]) => (
-              <Button
-                key={key}
-                variant={selectedSeverity === value ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => handleSeverityFilter(value)}
-              >
-                {key}
-              </Button>
-            ))}
-          </div>
+    <div className="card">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-700/50">
+        <div className="flex items-center gap-3">
+          <AlertTriangle className="text-red-400" size={20} />
+          <h3 className="text-xl font-semibold text-white">Alarms</h3>
+          {alarms.length > 0 && (
+            <Badge type="status" value={`${alarms.length} alarms`} size="sm" />
+          )}
         </div>
       </div>
 
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="card p-4">
-            <div className="text-sm text-gray-400 mb-1">Total Alarms</div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
-          </div>
-          <div className="card p-4">
-            <div className="text-sm text-gray-400 mb-1">Critical</div>
-            <div className="text-2xl font-bold text-red-400">{stats.by_severity?.Critical || 0}</div>
-          </div>
-          <div className="card p-4">
-            <div className="text-sm text-gray-400 mb-1">Warning</div>
-            <div className="text-2xl font-bold text-yellow-400">{stats.by_severity?.Warning || 0}</div>
-          </div>
-          <div className="card p-4">
-            <div className="text-sm text-gray-400 mb-1">Info</div>
-            <div className="text-2xl font-bold text-blue-400">{stats.by_severity?.Info || 0}</div>
+      {/* Filter Bar */}
+      <FilterBar
+        showClear={false}
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-gray-400" />
+            <label className="text-sm text-gray-400 whitespace-nowrap">Severity:</label>
+            <select
+              value={selectedSeverity}
+              onChange={(e) => handleSeverityFilter(e.target.value)}
+              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+            >
+              <option value="">All Severities</option>
+              {Object.entries(ALARM_SEVERITY).map(([key, value]) => (
+                <option key={key} value={value}>
+                  {key}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+      </FilterBar>
 
       {/* Alarms Table */}
-      <div className="card">
-        {loading ? (
-          <div className="flex items-center justify-center h-[300px]">
-            <LoadingSpinner />
+      {loading ? (
+        <div className="flex items-center justify-center h-[300px]">
+          <LoadingSpinner />
+        </div>
+      ) : alarms.length === 0 ? (
+        <div className="flex items-center justify-center h-[300px] text-gray-400">
+          <div className="text-center">
+            <p className="text-lg mb-2">No alarms found for this site</p>
+            <p className="text-sm text-gray-500">Site ID: {siteId}</p>
           </div>
-        ) : alarms.length === 0 ? (
-          <div className="flex items-center justify-center h-[300px] text-gray-400">
-            <div className="text-center">
-              <p className="text-lg mb-2">No alarms found for this site</p>
-              <p className="text-sm text-gray-500">Site ID: {siteId}</p>
-            </div>
-          </div>
-        ) : (
-          <DataTable
-            data={alarms}
-            columns={columns}
-            loading={loading}
-            emptyMessage="No alarms found for this site"
-          />
-        )}
-      </div>
+        </div>
+      ) : (
+        <DataTable
+          data={alarms}
+          columns={columns}
+          loading={loading}
+          emptyMessage="No alarms found for this site"
+        />
+      )}
 
       {/* Pagination */}
       {pagination.total > 0 && (
-        <Pagination
-          currentPage={Math.floor(pagination.offset / pagination.limit) + 1}
-          totalPages={Math.ceil(pagination.total / pagination.limit)}
-          onPageChange={handlePageChange}
-        />
+        <div className="mt-4">
+          <Pagination
+            currentPage={Math.floor(pagination.offset / 15) + 1}
+            totalPages={Math.ceil(pagination.total / 15)}
+            totalItems={pagination.total}
+            itemsPerPage={15}
+            onPageChange={handlePageChange}
+          />
+        </div>
       )}
     </div>
   );

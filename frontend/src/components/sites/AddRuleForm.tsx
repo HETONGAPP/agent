@@ -225,10 +225,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
         severity: 'Warning',
         priority: '5',
         actions: [
-          { name: 'trigger_llm_diagnostic', enabled: true },
           { name: 'send_email', enabled: false },
-          { name: 'notify_engineer', enabled: false },
-          { name: 'log_alarm', enabled: true },
         ],
       };
     }
@@ -251,10 +248,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
     
     // Parse actions from initialRule
     let actions = [
-      { name: 'trigger_llm_diagnostic', enabled: true },
       { name: 'send_email', enabled: false },
-      { name: 'notify_engineer', enabled: false },
-      { name: 'log_alarm', enabled: true },
     ];
     
     if (initialRule.actions && Array.isArray(initialRule.actions)) {
@@ -262,9 +256,13 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
       const actionMap = new Map();
       initialRule.actions.forEach((action: any) => {
         if (typeof action === 'string') {
-          actionMap.set(action, { name: action, enabled: true });
+          if (action === 'send_email') {
+            actionMap.set(action, { name: action, enabled: true });
+          }
         } else if (action.name) {
-          actionMap.set(action.name, { name: action.name, enabled: action.enabled !== false });
+          if (action.name === 'send_email') {
+            actionMap.set(action.name, { name: action.name, enabled: action.enabled !== false });
+          }
         }
       });
       

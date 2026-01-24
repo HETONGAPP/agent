@@ -45,18 +45,13 @@ export const AlarmManagement = () => {
   
 
   const { addToast } = useToastStore();
-  const { sites, fetchSites } = useSiteStore();
+  const { sites } = useSiteStore(); // Sites are preloaded in App.tsx, no need to fetch here
   const [filters, setLocalFilters] = useState<AlarmFilters>({});
   const [selectedSeverity, setSelectedSeverity] = useState<string>('');
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [selectedDeviceType, setSelectedDeviceType] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [generatingDiagnostics, setGeneratingDiagnostics] = useState<Set<string>>(new Set());
-  
-  // Fetch sites on mount
-  useEffect(() => {
-    fetchSites();
-  }, [fetchSites]);
   
   // Sync selectedSeverity with filters on mount
   useEffect(() => {

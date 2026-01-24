@@ -21,6 +21,17 @@ import { SiteDetails } from './pages/SiteDetails';
 
 function App() {
   const { toasts, removeToast } = useToastStore();
+  const { sites, fetchSites, loading: sitesLoading } = useSiteStore();
+  
+  // Preload global shared data on app mount
+  // This ensures sites data is available to all pages without duplicate fetches
+  useEffect(() => {
+    // Only fetch if sites list is empty and not currently loading
+    if (sites.length === 0 && !sitesLoading) {
+      console.log('[App] Preloading sites data...');
+      fetchSites();
+    }
+  }, [sites.length, sitesLoading, fetchSites]);
   
   // Global listener for diagnostic_created events - shows toast on any page
   useEffect(() => {

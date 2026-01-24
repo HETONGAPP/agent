@@ -20,6 +20,12 @@ interface DiagnosticStore {
   loading: boolean;
   error: string | null;
   filters: DiagnosticFilters | undefined;
+  // Cache for stats to avoid duplicate fetches
+  statsCache: {
+    key: string;
+    stats: DiagnosticStats;
+    timestamp: number;
+  } | null;
 
   // Actions
   fetchDiagnostics: (filters?: DiagnosticFilters, limit?: number, offset?: number, silent?: boolean) => Promise<void>;
@@ -45,6 +51,7 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
   loading: false,
   error: null,
   filters: undefined,
+  statsCache: null,
 
   // Fetch diagnostics list
   fetchDiagnostics: async (filters, limit = 20, offset = 0, silent = false) => {
@@ -106,14 +113,38 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
     }
   },
 
-  // Fetch statistics
+  // Fetch statistics with caching to avoid duplicate fetches
   fetchStats: async (startTime?: string, endTime?: string, filters?: DiagnosticFilters, forceUpdate?: boolean) => {
+    // Generate cache key from parameters
+    const cacheKey = JSON.stringify({ startTime, endTime, filters });
+    const cache = get().statsCache;
+    const CACHE_TTL = 5000; // 5 seconds cache
+    
+    // Check cache if not forcing update
+    if (!forceUpdate && cache && cache.key === cacheKey) {
+      const age = Date.now() - cache.timestamp;
+      if (age < CACHE_TTL) {
+        // Use cached stats if available and fresh
+        set({ stats: cache.stats });
+        return;
+      }
+    }
+    
     try {
       const response: ApiResponse<DiagnosticStats> = await getDiagnosticStats(startTime, endTime, filters);
       
       if (response.status === 'success' && response.data) {
         const currentStats = get().stats;
         const newStats = response.data;
+        
+        // Update cache
+        set({
+          statsCache: {
+            key: cacheKey,
+            stats: newStats,
+            timestamp: Date.now(),
+          },
+        });
         
         // If forceUpdate is true, always update regardless of comparison
         // This is useful after deletions to ensure stats are refreshed from server

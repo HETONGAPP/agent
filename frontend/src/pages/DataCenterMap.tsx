@@ -16,16 +16,19 @@ import { Plus, RefreshCw } from 'lucide-react';
 import { PageLoading } from '@/components/ui/PageLoading';
 
 export const DataCenterMapPage = () => {
-  const { sites, loading, fetchSites, error } = useSiteStore();
+  const { sites, loading, fetchSites, error } = useSiteStore(); // Sites are preloaded in App.tsx
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [clickedPosition, setClickedPosition] = useState<{ lat: number; lng: number } | null>(null);
   const navigate = useNavigate();
 
-  // Initial fetch on mount
+  // Sites are preloaded in App.tsx, but refresh if needed (e.g., after adding a site)
+  // Only fetch if sites list is empty (fallback)
   useEffect(() => {
-    console.log('[DataCenterMapPage] Component mounted, fetching sites...');
-    fetchSites();
-  }, [fetchSites]);
+    if (sites.length === 0 && !loading) {
+      console.log('[DataCenterMapPage] Sites list empty, fetching...');
+      fetchSites();
+    }
+  }, [sites.length, loading, fetchSites]);
 
   // Debug: Log sites when they change
   useEffect(() => {

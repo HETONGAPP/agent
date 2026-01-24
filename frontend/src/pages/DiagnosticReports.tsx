@@ -57,7 +57,7 @@ export const DiagnosticReports = () => {
   const deferredStats = useDeferredValue(stats);
 
   const { addToast } = useToastStore();
-  const { sites, fetchSites } = useSiteStore();
+  const { sites } = useSiteStore(); // Sites are preloaded in App.tsx, no need to fetch here
   const [filters, setLocalFilters] = useState<DiagnosticFilters>({
     alarm_id: alarmIdParam || undefined,
     site_id: siteIdParam || undefined,
@@ -70,11 +70,6 @@ export const DiagnosticReports = () => {
   const [diagnosticToDelete, setDiagnosticToDelete] = useState<Diagnostic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  
-  // Fetch sites on mount
-  useEffect(() => {
-    fetchSites();
-  }, [fetchSites]);
   
   // Sync filters with state on mount
   useEffect(() => {

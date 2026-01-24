@@ -128,15 +128,10 @@ function ZoomLimiter({ minZoom, maxZoom }: { minZoom: number; maxZoom: number })
 }
 
 export const DataCenterMap = ({ onSiteClick, onMapClick, height = '600px' }: DataCenterMapProps) => {
-  const { sites, loading, fetchSites } = useSiteStore();
+  const { sites, loading } = useSiteStore(); // Sites are preloaded in App.tsx, no need to fetch here
   // Default center: North America (USA center)
   const [mapCenter, setMapCenter] = useState<[number, number]>([45.0, -100.0]); // Center of North America
   const [mapZoom, setMapZoom] = useState(4); // Zoom level to cover entire North America
-
-  useEffect(() => {
-    console.log('[DataCenterMap] Component mounted, fetching sites...');
-    fetchSites();
-  }, [fetchSites]);
 
   // Debug: Log sites when they change
   useEffect(() => {

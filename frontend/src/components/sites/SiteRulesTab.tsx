@@ -67,14 +67,42 @@ export const SiteRulesTab = ({
   
   // Flatten rules into table rows: one row per rule
   // First, add device-specific rules
-  const deviceRulesData = deviceRules.flatMap((deviceRule: any) => 
-    (deviceRule.rules || []).map((rule: any, index: number) => {
+  const deviceRulesData = useMemo(() => {
+    return deviceRules.flatMap((deviceRule: any) => 
+      (deviceRule.rules || []).map((rule: any, index: number) => {
+        const condition = rule.condition || {};
+        return {
+          device_id: deviceRule.device_id,
+          device_name: deviceRule.device_name,
+          device_type: deviceRule.device_type,
+          rule_id: rule.id || `rule_${deviceRule.device_id}_${index}`,
+          rule_name: rule.name || rule.id || `Rule ${index + 1}`,
+          rule_description: rule.description || '',
+          rule_priority: rule.priority ?? 0,
+          rule_severity: rule.severity || '',
+          rule_condition: rule.condition ? JSON.stringify(rule.condition) : '',
+          rule_value: condition.value ?? '-',
+          rule_operator: condition.operator || '',
+          rule_unit: condition.unit || '',
+          rule_enabled: rule.enabled !== false, // Default to true if not specified
+          fullRule: rule,
+        };
+      })
+    );
+  }, [deviceRules]);
+  
+  // Then, add unassigned rules (site-level, multi-device rules)
+  // EMS rules should have device_id as "GLOBAL"
+  const unassignedRulesData = useMemo(() => {
+    return unassignedRules.map((rule: any, index: number) => {
+      const ruleDeviceTypes = rule.device_types || [];
+      const isEMS = ruleDeviceTypes.includes('EMS');
       const condition = rule.condition || {};
       return {
-        device_id: deviceRule.device_id,
-        device_name: deviceRule.device_name,
-        device_type: deviceRule.device_type,
-        rule_id: rule.id || `rule_${deviceRule.device_id}_${index}`,
+        device_id: isEMS ? 'GLOBAL' : '-',
+        device_name: isEMS ? 'Global (EMS)' : 'Site Level',
+        device_type: ruleDeviceTypes.join(', ') || 'EMS',
+        rule_id: rule.id || `rule_unassigned_${index}`,
         rule_name: rule.name || rule.id || `Rule ${index + 1}`,
         rule_description: rule.description || '',
         rule_priority: rule.priority ?? 0,
@@ -86,35 +114,20 @@ export const SiteRulesTab = ({
         rule_enabled: rule.enabled !== false, // Default to true if not specified
         fullRule: rule,
       };
-    })
-  );
+    });
+  }, [unassignedRules]);
   
-  // Then, add unassigned rules (site-level, multi-device rules)
-  // EMS rules should have device_id as "GLOBAL"
-  const unassignedRulesData = unassignedRules.map((rule: any, index: number) => {
-    const ruleDeviceTypes = rule.device_types || [];
-    const isEMS = ruleDeviceTypes.includes('EMS');
-    const condition = rule.condition || {};
-    return {
-      device_id: isEMS ? 'GLOBAL' : '-',
-      device_name: isEMS ? 'Global (EMS)' : 'Site Level',
-      device_type: ruleDeviceTypes.join(', ') || 'EMS',
-      rule_id: rule.id || `rule_unassigned_${index}`,
-      rule_name: rule.name || rule.id || `Rule ${index + 1}`,
-      rule_description: rule.description || '',
-      rule_priority: rule.priority ?? 0,
-      rule_severity: rule.severity || '',
-      rule_condition: rule.condition ? JSON.stringify(rule.condition) : '',
-      rule_value: condition.value ?? '-',
-      rule_operator: condition.operator || '',
-      rule_unit: condition.unit || '',
-      rule_enabled: rule.enabled !== false, // Default to true if not specified
-      fullRule: rule,
-    };
-  });
-  
-  // Combine all rules
-  const allRulesTableData = [...deviceRulesData, ...unassignedRulesData];
+  // Combine all rules and sort by priority (desc) then by rule_id for stable ordering
+  const allRulesTableData = useMemo(() => {
+    const combined = [...deviceRulesData, ...unassignedRulesData];
+    // Sort by priority (descending) then by rule_id (ascending) for stable ordering
+    return combined.sort((a, b) => {
+      const priorityDiff = (b.rule_priority || 0) - (a.rule_priority || 0);
+      if (priorityDiff !== 0) return priorityDiff;
+      // If priority is the same, sort by rule_id for stable ordering
+      return (a.rule_id || '').localeCompare(b.rule_id || '');
+    });
+  }, [deviceRulesData, unassignedRulesData]);
   
   // Filter rules by device type and device ID
   const rulesTableData = useMemo(() => {

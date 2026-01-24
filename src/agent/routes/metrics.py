@@ -6,6 +6,7 @@ import logging
 from typing import Optional
 from fastapi import Depends
 from fastapi.responses import JSONResponse
+import psutil
 
 from ...storage.influxdb_client import InfluxDBClient
 from ...agent.service import AgentService
@@ -158,6 +159,67 @@ def register_metrics_routes(app):
             }
         except Exception as e:
             logger.error(f"Error getting device time series: {e}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": str(e)},
+            )
+    
+    @app.get("/api/v1/metrics/system")
+    async def get_system_metrics(
+        _rate_limited: bool = Depends(rate_limit_dependency),
+    ):
+        """Get system resource metrics (CPU, memory, data throughput)"""
+        try:
+            # CPU usage
+            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_count = psutil.cpu_count()
+            cpu_freq = psutil.cpu_freq()
+            
+            # Memory usage
+            memory = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            
+            # Network I/O (data throughput)
+            network_io = psutil.net_io_counters()
+            
+            # Disk I/O
+            disk_io = psutil.disk_io_counters()
+            
+            return {
+                "status": "success",
+                "data": {
+                    "cpu": {
+                        "usage_percent": cpu_percent,
+                        "count": cpu_count,
+                        "frequency_mhz": cpu_freq.current if cpu_freq else None,
+                    },
+                    "memory": {
+                        "total_gb": round(memory.total / (1024 ** 3), 2),
+                        "used_gb": round(memory.used / (1024 ** 3), 2),
+                        "available_gb": round(memory.available / (1024 ** 3), 2),
+                        "usage_percent": memory.percent,
+                    },
+                    "swap": {
+                        "total_gb": round(swap.total / (1024 ** 3), 2),
+                        "used_gb": round(swap.used / (1024 ** 3), 2),
+                        "usage_percent": swap.percent,
+                    },
+                    "network": {
+                        "bytes_sent_mb": round(network_io.bytes_sent / (1024 ** 2), 2) if network_io else 0,
+                        "bytes_recv_mb": round(network_io.bytes_recv / (1024 ** 2), 2) if network_io else 0,
+                        "packets_sent": network_io.packets_sent if network_io else 0,
+                        "packets_recv": network_io.packets_recv if network_io else 0,
+                    },
+                    "disk_io": {
+                        "read_mb": round(disk_io.read_bytes / (1024 ** 2), 2) if disk_io else 0,
+                        "write_mb": round(disk_io.write_bytes / (1024 ** 2), 2) if disk_io else 0,
+                        "read_count": disk_io.read_count if disk_io else 0,
+                        "write_count": disk_io.write_count if disk_io else 0,
+                    },
+                },
+            }
+        except Exception as e:
+            logger.error(f"Error getting system metrics: {e}", exc_info=True)
             return JSONResponse(
                 status_code=500,
                 content={"status": "error", "message": str(e)},

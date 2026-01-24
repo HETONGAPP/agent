@@ -287,10 +287,18 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                     {/* Content */}
                     <div className="flex-1 flex items-center justify-between gap-4">
                       <div>
-                        <div className="text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                        <div className="text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">
                           Risk Assessment
                         </div>
-                        <RiskLevelBadge level={report.risk_level} />
+                        <div className={`text-2xl font-bold ${
+                          report.risk_level === 'High'
+                            ? 'text-red-400'
+                            : report.risk_level === 'Medium'
+                            ? 'text-amber-400'
+                            : 'text-green-400'
+                        }`}>
+                          {report.risk_level}
+                        </div>
                       </div>
                       {report.risk_level === 'High' && (
                         <span className="px-3 py-1.5 text-xs font-semibold bg-red-500/30 text-red-300 border border-red-500/50 rounded-full whitespace-nowrap">

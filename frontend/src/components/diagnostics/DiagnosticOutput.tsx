@@ -369,36 +369,41 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
               </SectionCard>
             )}
 
-            {/* Grid Layout for Causes and Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Possible Causes */}
             {report.possible_causes && report.possible_causes.length > 0 && (
-                <SectionCard icon={AlertCircle} title="Possible Causes">
-                  <ul className="space-y-2">
+              <SectionCard icon={AlertCircle} title="Possible Causes">
+                <ul className="space-y-2">
                   {report.possible_causes.map((cause: string, index: number) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                        <span className="text-zinc-300">{cause}</span>
-                      </li>
+                    <li key={index} className="flex items-start gap-2">
+                      <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                      <span className="text-zinc-300">{cause}</span>
+                    </li>
                   ))}
                 </ul>
-                </SectionCard>
+              </SectionCard>
             )}
 
-            {/* Recommended Actions */}
+            {/* Recommended Actions - Card Grid Layout */}
             {report.recommended_actions && report.recommended_actions.length > 0 && (
-                <SectionCard icon={Lightbulb} title="Recommended Actions">
-                  <ul className="space-y-2">
+              <SectionCard icon={Lightbulb} title="Recommended Actions">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {report.recommended_actions.map((action: string, index: number) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-                        <span className="text-zinc-300">{action}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </SectionCard>
-              )}
-            </div>
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50 hover:border-green-500/50 hover:bg-zinc-800/70 transition-all duration-200"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                        <p className="text-sm text-zinc-300 leading-relaxed">{action}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
 
             {/* References */}
             {report.references && report.references.length > 0 && (

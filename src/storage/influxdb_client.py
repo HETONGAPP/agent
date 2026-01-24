@@ -1076,8 +1076,10 @@ class InfluxDBClient:
             query += ' |> filter(fn: (r) => exists r._value)'
             
             # Group by device_id and metric to aggregate separately
+            # Always group by device_id if filtering by device_ids (even for single device)
+            # This ensures device_id is preserved in the result
             group_columns = []
-            if device_ids and len(device_ids) > 1:
+            if device_ids:
                 group_columns.append("device_id")
             if not metric:
                 group_columns.append("metric")
@@ -1088,8 +1090,9 @@ class InfluxDBClient:
             # Before aggregation, map to ensure only _value field is kept
             # This prevents aggregateWindow from trying to aggregate string fields
             # Keep only essential columns: _time, _value, and grouping columns
+            # Always keep device_id if filtering by device_ids (even for single device)
             keep_cols = ["_time", "_value"]
-            if device_ids and len(device_ids) > 1:
+            if device_ids:
                 keep_cols.append("device_id")
             if not metric:
                 keep_cols.append("metric")

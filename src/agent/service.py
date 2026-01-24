@@ -7,7 +7,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..core.data_flow_tracker import DataFlowTracker
@@ -580,31 +580,127 @@ class AgentService:
                                 updated_device
                             )
                 else:
-                    # Device not registered - reject data
-                    logger.warning(
-                        f"✗ Rejecting data from unregistered device {device_data.device_id}. "
-                        f"Device must be registered before data can be processed."
+                    # Device not registered - auto-register it
+                    logger.info(
+                        f"🔄 Auto-registering device {device_data.device_id} from MQTT data "
+                        f"(type={device_data.device_type.value}, site_id={device_data.site_id})"
                     )
-                    if self.flow_tracker:
-                        self.flow_tracker.track(
-                            stage="device_status_check",
-                            data_id=device_data.device_id,
-                            metadata={
-                                "status": "unregistered",
-                                "action": "rejected",
-                                "device_type": device_data.device_type.value,
-                                "source": device_data.source,
-                            },
-                            status="rejected",
-                        )
-                    return {
-                        "status": "rejected",
-                        "message": f"Device {device_data.device_id} is not registered. Data rejected.",
-                        "device_id": device_data.device_id,
-                        "device_status": "unregistered",
-                        "alarms_processed": 0,
-                        "data_stored": False,
+                    
+                    # Prepare metadata for auto-registration
+                    metadata = {
+                        "site_id": device_data.site_id,
+                        "source": device_data.source or "mqtt",
+                        "registered_via": "auto_mqtt",
+                        "registered_at": datetime.now(timezone.utc).isoformat(),
                     }
+                    if device_data.site_name:
+                        metadata["site_name"] = device_data.site_name
+                    
+                    # Auto-register the device
+                    try:
+                        registered_device = device_registry.register_device(
+                            device_id=device_data.device_id,
+                            device_type=device_data.device_type,
+                            integration_name="mqtt",  # Use "mqtt" as integration name for auto-registered devices
+                            metadata=metadata,
+                        )
+                        
+                        if registered_device.status == DeviceStatus.UNREGISTERED:
+                            # Registration was rejected (e.g., device was deleted)
+                            logger.warning(
+                                f"✗ Auto-registration rejected for device {device_data.device_id}. "
+                                f"Device may have been deleted. Data rejected."
+                            )
+                            if self.flow_tracker:
+                                self.flow_tracker.track(
+                                    stage="device_status_check",
+                                    data_id=device_data.device_id,
+                                    metadata={
+                                        "status": "unregistered",
+                                        "action": "rejected",
+                                        "device_type": device_data.device_type.value,
+                                        "source": device_data.source,
+                                    },
+                                    status="rejected",
+                                )
+                            return {
+                                "status": "rejected",
+                                "message": f"Device {device_data.device_id} auto-registration rejected. Device may have been deleted.",
+                                "device_id": device_data.device_id,
+                                "device_status": "unregistered",
+                                "alarms_processed": 0,
+                                "data_stored": False,
+                            }
+                        
+                        # Mark device as seen (will activate it)
+                        device_registry.mark_device_seen(device_data.device_id)
+                        
+                        logger.info(
+                            f"✓ Device {device_data.device_id} auto-registered successfully "
+                            f"(status={registered_device.status.value})"
+                        )
+                        
+                        # Broadcast device added event
+                        from ..agent.dependencies import get_app_state
+                        from ..agent.websocket_manager import EventType
+                        app_state = get_app_state()
+                        websocket_manager = app_state.get("websocket_manager")
+                        if websocket_manager:
+                            await websocket_manager.broadcast(
+                                EventType.DEVICE_ADDED, {"data": registered_device.to_dict()}
+                            )
+                        
+                        if self.flow_tracker:
+                            self.flow_tracker.track(
+                                stage="device_auto_registration",
+                                data_id=device_data.device_id,
+                                metadata={
+                                    "device_type": device_data.device_type.value,
+                                    "source": device_data.source,
+                                    "site_id": device_data.site_id,
+                                },
+                                status="registered",
+                            )
+                        
+                        # Auto-create rules for this device if site_id is provided
+                        if device_data.site_id:
+                            try:
+                                from ..agent.dependencies import get_site_manager
+                                site_manager = get_site_manager()
+                                if site_manager:
+                                    rules_created = site_manager.create_device_rules(
+                                        device_id=device_data.device_id,
+                                        device_type=device_data.device_type.value,
+                                        site_id=device_data.site_id
+                                    )
+                                    logger.info(f"Auto-created {rules_created} rules for auto-registered device {device_data.device_id} in site {device_data.site_id}")
+                            except Exception as e:
+                                logger.warning(f"Failed to auto-create rules for device {device_data.device_id}: {e}")
+                        
+                    except Exception as e:
+                        logger.error(
+                            f"✗ Failed to auto-register device {device_data.device_id}: {e}",
+                            exc_info=True
+                        )
+                        if self.flow_tracker:
+                            self.flow_tracker.track(
+                                stage="device_auto_registration",
+                                data_id=device_data.device_id,
+                                metadata={
+                                    "error": str(e),
+                                    "device_type": device_data.device_type.value,
+                                    "source": device_data.source,
+                                },
+                                status="failed",
+                            )
+                        return {
+                            "status": "error",
+                            "message": f"Failed to auto-register device {device_data.device_id}: {str(e)}",
+                            "device_id": device_data.device_id,
+                            "device_status": "unregistered",
+                            "alarms_processed": 0,
+                            "data_stored": False,
+                        }
             
             # Store device data to InfluxDB first (regardless of alarms)
             # Use site container if available and enabled, otherwise fallback to direct influx_client

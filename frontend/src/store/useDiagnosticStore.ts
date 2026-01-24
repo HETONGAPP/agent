@@ -24,7 +24,7 @@ interface DiagnosticStore {
   // Actions
   fetchDiagnostics: (filters?: DiagnosticFilters, limit?: number, offset?: number, silent?: boolean) => Promise<void>;
   fetchDiagnostic: (alarmId: string) => Promise<void>;
-  fetchStats: (startTime?: string, endTime?: string) => Promise<void>;
+  fetchStats: (startTime?: string, endTime?: string, filters?: DiagnosticFilters, forceUpdate?: boolean) => Promise<void>;
   deleteDiagnostic: (alarmId: string) => Promise<boolean>;
   setFilters: (filters: DiagnosticFilters | undefined) => void;
   setPagination: (limit: number, offset: number) => void;
@@ -107,15 +107,22 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
   },
 
   // Fetch statistics
-  fetchStats: async (startTime?: string, endTime?: string, filters?: DiagnosticFilters) => {
+  fetchStats: async (startTime?: string, endTime?: string, filters?: DiagnosticFilters, forceUpdate?: boolean) => {
     try {
       const response: ApiResponse<DiagnosticStats> = await getDiagnosticStats(startTime, endTime, filters);
       
       if (response.status === 'success' && response.data) {
-        // Only update if stats actually changed to prevent unnecessary re-renders
         const currentStats = get().stats;
         const newStats = response.data;
         
+        // If forceUpdate is true, always update regardless of comparison
+        // This is useful after deletions to ensure stats are refreshed from server
+        if (forceUpdate) {
+          set({ stats: newStats });
+          return;
+        }
+        
+        // Only update if stats actually changed to prevent unnecessary re-renders
         // Compare stats to avoid unnecessary updates
         // Deep comparison to prevent updates when data hasn't actually changed
         const statsChanged = !currentStats || 
@@ -175,6 +182,7 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
       if (response.status === 'success') {
         // Remove from local state
         const currentDiagnostics = get().diagnostics;
+        const deletedDiagnostic = currentDiagnostics.find(d => d.alarm_id === alarmId);
         const updatedDiagnostics = currentDiagnostics.filter(d => d.alarm_id !== alarmId);
         
         // Update pagination total
@@ -184,11 +192,69 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
           total: Math.max(0, currentPagination.total - 1),
         };
         
-        set({
-          diagnostics: updatedDiagnostics,
-          pagination: updatedPagination,
-          loading: false,
-        });
+        // Update stats locally to keep UI in sync immediately
+        const currentStats = get().stats;
+        if (currentStats) {
+          let updatedStats = { ...currentStats };
+          
+          if (deletedDiagnostic) {
+            // If we found the deleted diagnostic, update stats based on its risk level
+            const riskLevel = deletedDiagnostic.risk_level;
+            updatedStats = {
+              ...currentStats,
+              total: Math.max(0, currentStats.total - 1),
+              by_risk_level: {
+                ...currentStats.by_risk_level,
+                High: Math.max(0, (currentStats.by_risk_level?.High || 0) - (riskLevel === 'High' ? 1 : 0)),
+                Medium: Math.max(0, (currentStats.by_risk_level?.Medium || 0) - (riskLevel === 'Medium' ? 1 : 0)),
+                Low: Math.max(0, (currentStats.by_risk_level?.Low || 0) - (riskLevel === 'Low' ? 1 : 0)),
+              },
+            };
+          } else {
+            // If deleted diagnostic not found in current list, recalculate from remaining diagnostics
+            // This handles cases where the deleted diagnostic was filtered out
+            const riskLevelCounts = updatedDiagnostics.reduce((acc, d) => {
+              const level = d.risk_level;
+              if (level) {
+                acc[level] = (acc[level] || 0) + 1;
+              }
+              return acc;
+            }, {} as Record<string, number>);
+            
+            updatedStats = {
+              total: updatedDiagnostics.length,
+              by_risk_level: {
+                High: riskLevelCounts.High || riskLevelCounts.high || 0,
+                Medium: riskLevelCounts.Medium || riskLevelCounts.medium || 0,
+                Low: riskLevelCounts.Low || riskLevelCounts.low || 0,
+              },
+            };
+          }
+          
+          // Ensure all risk levels are present even if 0
+          if (!updatedStats.by_risk_level.High && updatedStats.by_risk_level.High !== 0) {
+            updatedStats.by_risk_level.High = 0;
+          }
+          if (!updatedStats.by_risk_level.Medium && updatedStats.by_risk_level.Medium !== 0) {
+            updatedStats.by_risk_level.Medium = 0;
+          }
+          if (!updatedStats.by_risk_level.Low && updatedStats.by_risk_level.Low !== 0) {
+            updatedStats.by_risk_level.Low = 0;
+          }
+          
+          set({
+            diagnostics: updatedDiagnostics,
+            pagination: updatedPagination,
+            stats: updatedStats,
+            loading: false,
+          });
+        } else {
+          set({
+            diagnostics: updatedDiagnostics,
+            pagination: updatedPagination,
+            loading: false,
+          });
+        }
         
         // Clear selected diagnostic if it was deleted
         const selectedDiagnostic = get().selectedDiagnostic;

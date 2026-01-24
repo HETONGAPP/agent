@@ -340,7 +340,8 @@ export const SiteReportsTab = ({ siteId }: SiteReportsTabProps) => {
                 });
                 // Refresh the list
                 fetchDiagnostics(filters, 15, pagination.offset);
-                fetchStats(undefined, undefined, filters);
+                // Force refresh stats from server to ensure accuracy after deletion
+                fetchStats(undefined, undefined, filters, true);
                 setShowDeleteModal(false);
                 setDiagnosticToDelete(null);
               } else {

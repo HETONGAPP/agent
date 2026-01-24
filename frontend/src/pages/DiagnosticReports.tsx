@@ -717,8 +717,11 @@ export const DiagnosticReports = () => {
                   type: 'success',
                   message: 'Diagnostic report removed successfully',
                 });
-                // Refresh the list
+                // Refresh the list and stats to keep them in sync
+                // Fetch immediately - store already updated stats locally
                 fetchDiagnostics(filters, pagination.limit, pagination.offset);
+                // Force refresh stats from server to ensure accuracy after deletion
+                fetchStats(undefined, undefined, filters, true);
                 setShowDeleteModal(false);
                 setDiagnosticToDelete(null);
               } else {

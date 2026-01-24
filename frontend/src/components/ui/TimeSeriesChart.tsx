@@ -376,13 +376,19 @@ export const TimeSeriesChart = ({
   const { xScale, yScale, minValue, maxValue } = useMemo(() => {
     try {
       if (visibleData.length === 0) {
-        console.warn('[TimeSeriesChart] No visible data for scales calculation');
+        // Only warn if we have input data but no visible data (indicates a processing issue)
+        if (data.length > 0) {
+          console.debug('[TimeSeriesChart] No visible data for scales calculation (data processing may be in progress)');
+        }
         return { xScale: null, yScale: null, minValue: 0, maxValue: 0 };
       }
 
       // Check if inner dimensions are valid
       if (innerWidth <= 0 || innerHeight <= 0) {
-        console.warn('[TimeSeriesChart] Invalid inner dimensions:', { innerWidth, innerHeight, containerWidth });
+        // Only warn if we have data but container isn't ready (common during initial render)
+        if (data.length > 0 && containerWidth > 0) {
+          console.warn('[TimeSeriesChart] Invalid inner dimensions:', { innerWidth, innerHeight, containerWidth });
+        }
         return { xScale: null, yScale: null, minValue: 0, maxValue: 0 };
       }
 
@@ -734,17 +740,24 @@ export const TimeSeriesChart = ({
 
   // Validate scales before rendering
   if (!xScale || !yScale) {
-    // Debug information
-    console.warn('[TimeSeriesChart] Scales not available:', {
-      hasData: data.length > 0,
-      hasDisplayData: displayData.length > 0,
-      hasVisibleData: visibleData.length > 0,
-      containerWidth,
-      innerWidth,
-      innerHeight,
-      dataSample: data.slice(0, 3),
-      displayDataSample: displayData.slice(0, 3),
-    });
+    // Only warn if we have data and container is initialized (not just mounting)
+    // This prevents false warnings during initial render when containerWidth is 0
+    if (data.length > 0 && containerWidth > 0) {
+      console.warn('[TimeSeriesChart] Scales not available despite having data:', {
+        hasData: data.length > 0,
+        hasDisplayData: displayData.length > 0,
+        hasVisibleData: visibleData.length > 0,
+        containerWidth,
+        innerWidth,
+        innerHeight,
+      });
+    } else {
+      // Debug log for normal initialization case
+      console.debug('[TimeSeriesChart] Scales not ready (initializing):', {
+        hasData: data.length > 0,
+        containerWidth,
+      });
+    }
     
     // If we have data but scales aren't ready, it might be a calculation issue
     if (data.length > 0 && containerWidth > 0) {

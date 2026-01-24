@@ -14,6 +14,7 @@ from ...agent.dependencies import (
     get_agent_service,
     get_device_registry,
     get_query_cache,
+    get_postgres_metadata_storage,
 )
 from ...agent.rate_limiter import rate_limit_dependency
 from ...core import DeviceRegistry
@@ -607,4 +608,146 @@ def register_diagnostic_routes(app):
             "status": "success",
             "message": "Status tracking not yet implemented. Use /start endpoint to run diagnostics.",
         }
+    
+    @app.post("/api/v1/diagnostics/metadata")
+    async def create_diagnostic_metadata(
+        diagnostic_data: dict,
+        postgres_storage = Depends(get_postgres_metadata_storage),
+        _rate_limited: bool = Depends(rate_limit_dependency),
+    ):
+        """Create diagnostic metadata in PostgreSQL"""
+        if not postgres_storage:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "error",
+                    "message": "PostgreSQL metadata storage not initialized",
+                },
+            )
+        
+        try:
+            # Validate required fields
+            if not diagnostic_data.get("alarm_id"):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "status": "error",
+                        "message": "alarm_id is required",
+                    },
+                )
+            
+            if not diagnostic_data.get("risk_level"):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "status": "error",
+                        "message": "risk_level is required",
+                    },
+                )
+            
+            success = postgres_storage.save_diagnostic(diagnostic_data)
+            if success:
+                return {
+                    "status": "success",
+                    "message": f"Diagnostic metadata created for alarm {diagnostic_data.get('alarm_id')}",
+                }
+            else:
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "status": "error",
+                        "message": "Failed to create diagnostic metadata",
+                    },
+                )
+        except Exception as e:
+            logger.error(f"Error creating diagnostic metadata: {e}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "error",
+                    "message": str(e),
+                },
+            )
+    
+    @app.delete("/api/v1/diagnostics/metadata/{alarm_id}")
+    async def delete_diagnostic_metadata(
+        alarm_id: str,
+        postgres_storage = Depends(get_postgres_metadata_storage),
+        _rate_limited: bool = Depends(rate_limit_dependency),
+    ):
+        """Delete diagnostic metadata from PostgreSQL"""
+        if not postgres_storage:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "error",
+                    "message": "PostgreSQL metadata storage not initialized",
+                },
+            )
+        
+        try:
+            success = postgres_storage.delete_diagnostic(alarm_id)
+            if success:
+                return {
+                    "status": "success",
+                    "message": f"Diagnostic metadata deleted for alarm {alarm_id}",
+                }
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "status": "error",
+                        "message": f"Diagnostic metadata not found for alarm {alarm_id}",
+                    },
+                )
+        except Exception as e:
+            logger.error(f"Error deleting diagnostic metadata: {e}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "error",
+                    "message": str(e),
+                },
+            )
+    
+    @app.get("/api/v1/diagnostics/metadata")
+    async def list_diagnostic_metadata(
+        site_id: Optional[str] = None,
+        risk_level: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        postgres_storage = Depends(get_postgres_metadata_storage),
+        _rate_limited: bool = Depends(rate_limit_dependency),
+    ):
+        """List diagnostic metadata from PostgreSQL"""
+        if not postgres_storage:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "error",
+                    "message": "PostgreSQL metadata storage not initialized",
+                },
+            )
+        
+        try:
+            diagnostics = postgres_storage.get_all_diagnostics(
+                site_id=site_id,
+                risk_level=risk_level,
+                limit=limit,
+                offset=offset,
+            )
+            return {
+                "status": "success",
+                "data": diagnostics,
+                "total": len(diagnostics),
+            }
+        except Exception as e:
+            logger.error(f"Error listing diagnostic metadata: {e}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "error",
+                    "message": str(e),
+                },
+            )
     

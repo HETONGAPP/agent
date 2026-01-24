@@ -29,6 +29,7 @@ _app_state = {
     "rule_engine": None,
     "query_cache": None,
     "event_bus": None,
+    "postgres_metadata_storage": None,
 }
 
 
@@ -102,6 +103,11 @@ def get_event_bus():
     """Get event bus instance"""
     from ..core.event_bus import EventBus
     return _app_state.get("event_bus")
+
+
+def get_postgres_metadata_storage():
+    """Get PostgreSQL metadata storage instance"""
+    return _app_state.get("postgres_metadata_storage")
 
 
 # Dependency functions for FastAPI

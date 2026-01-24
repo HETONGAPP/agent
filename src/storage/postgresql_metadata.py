@@ -22,10 +22,11 @@ class PostgreSQLMetadataStorage:
             database: Database instance from core.database
         """
         self.database = database
-        from ..core.database import SiteModel, DeviceModel, RuleModel
+        from ..core.database import SiteModel, DeviceModel, RuleModel, DiagnosticModel
         self.SiteModel = SiteModel
         self.DeviceModel = DeviceModel
         self.RuleModel = RuleModel
+        self.DiagnosticModel = DiagnosticModel
 
     @contextmanager
     def _get_session(self):
@@ -594,4 +595,204 @@ class PostgreSQLMetadataStorage:
         except Exception as e:
             logger.error(f"Failed to get rules by device type from PostgreSQL: {e}", exc_info=True)
             return []
+
+    def save_diagnostic(self, diagnostic_data: Dict[str, Any]) -> bool:
+        """
+        Save diagnostic metadata to PostgreSQL
+
+        Args:
+            diagnostic_data: Diagnostic metadata dictionary with keys:
+                - alarm_id: Required, primary key
+                - site_id: Optional
+                - device_id: Optional
+                - device_type: Optional
+                - alarm_type: Optional
+                - risk_level: Required (High, Medium, Low)
+                - current_status: Optional
+                - diagnostic_name: Optional
+                - generated_at: Optional datetime or ISO string
+                - metadata: Optional additional metadata
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            alarm_id = diagnostic_data.get("alarm_id")
+            if not alarm_id:
+                logger.error("alarm_id is required for diagnostic")
+                return False
+
+            risk_level = diagnostic_data.get("risk_level")
+            if not risk_level:
+                logger.error("risk_level is required for diagnostic")
+                return False
+
+            with self._get_session() as session:
+                # Check if diagnostic exists
+                diagnostic = session.query(self.DiagnosticModel).filter_by(alarm_id=alarm_id).first()
+                
+                # Parse generated_at if provided
+                generated_at = diagnostic_data.get("generated_at")
+                if generated_at:
+                    if isinstance(generated_at, str):
+                        from dateutil.parser import parse
+                        generated_at = parse(generated_at)
+                    elif not isinstance(generated_at, datetime):
+                        generated_at = datetime.utcnow()
+                else:
+                    generated_at = datetime.utcnow()
+                
+                if diagnostic:
+                    # Update existing diagnostic
+                    diagnostic.site_id = diagnostic_data.get("site_id", diagnostic.site_id)
+                    diagnostic.device_id = diagnostic_data.get("device_id", diagnostic.device_id)
+                    diagnostic.device_type = diagnostic_data.get("device_type", diagnostic.device_type)
+                    diagnostic.alarm_type = diagnostic_data.get("alarm_type", diagnostic.alarm_type)
+                    diagnostic.risk_level = risk_level
+                    diagnostic.current_status = diagnostic_data.get("current_status", diagnostic.current_status)
+                    diagnostic.diagnostic_name = diagnostic_data.get("diagnostic_name", diagnostic.diagnostic_name)
+                    diagnostic.generated_at = generated_at
+                    diagnostic.diagnostic_metadata = diagnostic_data.get("metadata", diagnostic.diagnostic_metadata)
+                    diagnostic.updated_at = datetime.utcnow()
+                    logger.debug(f"Updated diagnostic {alarm_id} in PostgreSQL")
+                else:
+                    # Create new diagnostic
+                    diagnostic = self.DiagnosticModel(
+                        alarm_id=alarm_id,
+                        site_id=diagnostic_data.get("site_id"),
+                        device_id=diagnostic_data.get("device_id"),
+                        device_type=diagnostic_data.get("device_type"),
+                        alarm_type=diagnostic_data.get("alarm_type"),
+                        risk_level=risk_level,
+                        current_status=diagnostic_data.get("current_status"),
+                        diagnostic_name=diagnostic_data.get("diagnostic_name"),
+                        generated_at=generated_at,
+                        diagnostic_metadata=diagnostic_data.get("metadata"),
+                    )
+                    session.add(diagnostic)
+                    logger.debug(f"Created diagnostic {alarm_id} in PostgreSQL")
+
+            logger.info(f"Saved diagnostic metadata to PostgreSQL: {alarm_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save diagnostic to PostgreSQL: {e}", exc_info=True)
+            return False
+
+    def get_diagnostic(self, alarm_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get diagnostic metadata by alarm_id
+
+        Args:
+            alarm_id: Alarm ID
+
+        Returns:
+            Diagnostic metadata dictionary or None
+        """
+        try:
+            with self._get_session() as session:
+                diagnostic = session.query(self.DiagnosticModel).filter_by(alarm_id=alarm_id).first()
+                if not diagnostic:
+                    return None
+
+                return {
+                    "alarm_id": diagnostic.alarm_id,
+                    "site_id": diagnostic.site_id,
+                    "device_id": diagnostic.device_id,
+                    "device_type": diagnostic.device_type,
+                    "alarm_type": diagnostic.alarm_type,
+                    "risk_level": diagnostic.risk_level,
+                    "current_status": diagnostic.current_status,
+                    "diagnostic_name": diagnostic.diagnostic_name,
+                    "generated_at": diagnostic.generated_at.isoformat() if diagnostic.generated_at else None,
+                    "created_at": diagnostic.created_at.isoformat() if diagnostic.created_at else None,
+                    "updated_at": diagnostic.updated_at.isoformat() if diagnostic.updated_at else None,
+                    "metadata": diagnostic.diagnostic_metadata or {},
+                }
+        except Exception as e:
+            logger.error(f"Failed to get diagnostic from PostgreSQL: {e}", exc_info=True)
+            return None
+
+    def get_all_diagnostics(
+        self,
+        site_id: Optional[str] = None,
+        risk_level: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all diagnostics with optional filters
+
+        Args:
+            site_id: Optional site ID filter
+            risk_level: Optional risk level filter (High, Medium, Low)
+            limit: Optional limit
+            offset: Optional offset
+
+        Returns:
+            List of diagnostic metadata dictionaries
+        """
+        try:
+            with self._get_session() as session:
+                query = session.query(self.DiagnosticModel)
+                
+                if site_id:
+                    query = query.filter_by(site_id=site_id)
+                if risk_level:
+                    query = query.filter_by(risk_level=risk_level)
+                
+                # Order by generated_at descending (newest first)
+                query = query.order_by(self.DiagnosticModel.generated_at.desc())
+                
+                if limit:
+                    query = query.limit(limit)
+                if offset:
+                    query = query.offset(offset)
+                
+                diagnostics = query.all()
+                
+                result = []
+                for diagnostic in diagnostics:
+                    result.append({
+                        "alarm_id": diagnostic.alarm_id,
+                        "site_id": diagnostic.site_id,
+                        "device_id": diagnostic.device_id,
+                        "device_type": diagnostic.device_type,
+                        "alarm_type": diagnostic.alarm_type,
+                        "risk_level": diagnostic.risk_level,
+                        "current_status": diagnostic.current_status,
+                        "diagnostic_name": diagnostic.diagnostic_name,
+                        "generated_at": diagnostic.generated_at.isoformat() if diagnostic.generated_at else None,
+                        "created_at": diagnostic.created_at.isoformat() if diagnostic.created_at else None,
+                        "updated_at": diagnostic.updated_at.isoformat() if diagnostic.updated_at else None,
+                        "metadata": diagnostic.diagnostic_metadata or {},
+                    })
+                
+                return result
+        except Exception as e:
+            logger.error(f"Failed to get diagnostics from PostgreSQL: {e}", exc_info=True)
+            return []
+
+    def delete_diagnostic(self, alarm_id: str) -> bool:
+        """
+        Delete diagnostic metadata by alarm_id
+
+        Args:
+            alarm_id: Alarm ID
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self._get_session() as session:
+                diagnostic = session.query(self.DiagnosticModel).filter_by(alarm_id=alarm_id).first()
+                if not diagnostic:
+                    logger.warning(f"Diagnostic {alarm_id} not found in PostgreSQL")
+                    return False
+
+                session.delete(diagnostic)
+                logger.info(f"Deleted diagnostic {alarm_id} from PostgreSQL")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete diagnostic from PostgreSQL: {e}", exc_info=True)
+            return False
 

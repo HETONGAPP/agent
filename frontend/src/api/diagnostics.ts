@@ -80,12 +80,77 @@ export const generateAlarmDiagnostic = async (alarmId: string): Promise<ApiRespo
 };
 
 /**
- * Delete diagnostic report for a specific alarm
+ * Delete diagnostic metadata from PostgreSQL
  */
-export const deleteDiagnostic = async (alarmId: string): Promise<ApiResponse<void>> => {
+export const deleteDiagnosticMetadata = async (alarmId: string): Promise<ApiResponse<void>> => {
   return apiRequest<void>({
     method: 'DELETE',
+    url: `/api/v1/diagnostics/metadata/${alarmId}`,
+  });
+};
+
+/**
+ * Delete diagnostic report for a specific alarm
+ * Also deletes from PostgreSQL metadata if exists
+ */
+export const deleteDiagnostic = async (alarmId: string): Promise<ApiResponse<void>> => {
+  // Delete from InfluxDB (main storage)
+  const response = await apiRequest<void>({
+    method: 'DELETE',
     url: `/api/v1/diagnostics/${alarmId}`,
+  });
+  
+  // Also try to delete from PostgreSQL metadata (ignore errors if not exists)
+  try {
+    await deleteDiagnosticMetadata(alarmId);
+  } catch (error) {
+    // Silently ignore errors - metadata might not exist in PostgreSQL
+    console.debug(`Diagnostic metadata not found in PostgreSQL for ${alarmId}, skipping`);
+  }
+  
+  return response;
+};
+
+/**
+ * Create diagnostic metadata in PostgreSQL
+ */
+export const createDiagnosticMetadata = async (diagnosticData: {
+  alarm_id: string;
+  site_id?: string;
+  device_id?: string;
+  device_type?: string;
+  alarm_type?: string;
+  risk_level: 'High' | 'Medium' | 'Low';
+  current_status?: string;
+  diagnostic_name?: string;
+  generated_at?: string;
+  metadata?: Record<string, any>;
+}): Promise<ApiResponse<void>> => {
+  return apiRequest<void>({
+    method: 'POST',
+    url: '/api/v1/diagnostics/metadata',
+    data: diagnosticData,
+  });
+};
+
+/**
+ * List diagnostic metadata from PostgreSQL
+ */
+export const getDiagnosticMetadata = async (
+  site_id?: string,
+  risk_level?: string,
+  limit?: number,
+  offset?: number
+): Promise<ApiResponse<{ data: Diagnostic[]; total: number }>> => {
+  const params = new URLSearchParams();
+  if (site_id) params.append('site_id', site_id);
+  if (risk_level) params.append('risk_level', risk_level);
+  if (limit) params.append('limit', limit.toString());
+  if (offset !== undefined) params.append('offset', offset.toString());
+
+  return apiRequest<{ data: Diagnostic[]; total: number }>({
+    method: 'GET',
+    url: `/api/v1/diagnostics/metadata?${params.toString()}`,
   });
 };
 

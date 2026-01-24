@@ -3,7 +3,7 @@
  * Shows detailed information about a specific site
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, Clock, Settings, RefreshCw, Edit, Trash2, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -33,8 +33,10 @@ export const SiteDetails = () => {
   const { addToast } = useToastStore();
   
   // Use global diagnostic store for persistent state
+  // Subscribe to store changes to ensure reactivity
+  const diagnostics = useSiteDiagnosticStore((state) => state.diagnostics);
+  const isGeneratingForSite = useSiteDiagnosticStore((state) => state.isGeneratingForSite);
   const {
-    isGeneratingForSite,
     startDiagnostic,
     completeDiagnostic,
     getDiagnosticState,
@@ -105,7 +107,23 @@ export const SiteDetails = () => {
 
   // Diagnostic state - use global store for persistent state
   // Check if generating, but also verify it hasn't timed out
-  const isGeneratingDiagnostic = siteId ? isGeneratingForSite(siteId) : false;
+  // Subscribe to store changes via diagnostics map to ensure reactivity
+  const diagnosticState = siteId ? diagnostics[siteId] || null : null;
+  
+  const isGeneratingDiagnostic = useMemo(() => {
+    if (!siteId || !diagnosticState?.isGenerating) {
+      return false;
+    }
+    // Check timeout
+    if (diagnosticState.startTime) {
+      const elapsed = Date.now() - diagnosticState.startTime;
+      const maxDuration = diagnosticState.maxDuration || 30 * 60 * 1000;
+      if (elapsed > maxDuration) {
+        return false;
+      }
+    }
+    return true;
+  }, [siteId, diagnosticState?.isGenerating, diagnosticState?.startTime, diagnosticState?.maxDuration]);
   const [diagnosticResult, setDiagnosticResult] = useState<Diagnostic | null>(null);
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
   const [diagnosticTimeRange] = useState<string>('-24h'); // Time range for diagnostic (currently fixed to -24h)
@@ -214,6 +232,45 @@ export const SiteDetails = () => {
             // Diagnostic has completed, update state
             console.log('[SiteDetails] Found new diagnostic record, completing state');
             completeDiagnostic(siteId);
+            
+            // Get the latest diagnostic result and show modal
+            try {
+              // Find the newest diagnostic that matches our criteria
+              const latestDiagnostic = diagnostics
+                .filter((diag: any) => {
+                  const diagTime = diag.generated_at || diag.timestamp || diag._time;
+                  if (!diagTime) return false;
+                  let diagTimestamp: number;
+                  if (typeof diagTime === 'string') {
+                    diagTimestamp = new Date(diagTime).getTime();
+                    if (isNaN(diagTimestamp)) return false;
+                  } else if (typeof diagTime === 'number') {
+                    diagTimestamp = diagTime;
+                  } else {
+                    return false;
+                  }
+                  const timeDiff = diagTimestamp - startTime;
+                  return timeDiff >= -2000; // Same buffer as above
+                })
+                .sort((a: any, b: any) => {
+                  // Sort by timestamp descending to get the newest first
+                  const timeA = a.generated_at || a.timestamp || a._time || 0;
+                  const timeB = b.generated_at || b.timestamp || b._time || 0;
+                  const timestampA = typeof timeA === 'string' ? new Date(timeA).getTime() : (timeA || 0);
+                  const timestampB = typeof timeB === 'string' ? new Date(timeB).getTime() : (timeB || 0);
+                  return timestampB - timestampA;
+                })[0]; // Get the first (newest) one
+              
+              if (latestDiagnostic) {
+                setDiagnosticResult(latestDiagnostic);
+                setShowDiagnosticModal(true);
+              }
+            } catch (error) {
+              console.error('[SiteDetails] Error getting diagnostic result:', error);
+            }
+            
+            // Show success toast notification
+            addToast('AI diagnostic analysis completed', 'success');
           } else {
             console.log('[SiteDetails] No new diagnostic found yet, continuing to wait');
           }
@@ -385,14 +442,6 @@ export const SiteDetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Diagnostic Progress Indicator */}
-          {isGeneratingDiagnostic && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-              <span className="text-xs text-purple-300">Analyzing...</span>
-            </div>
-          )}
-          
           <Button
             variant="primary"
             size="sm"
@@ -450,15 +499,15 @@ export const SiteDetails = () => {
             className="group hover:bg-purple-600/90 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-200"
           >
             {isGeneratingDiagnostic ? (
-              <>
+              <span key="analyzing" className="flex items-center">
                 <LoadingSpinner size="sm" className="mr-2" />
                 Analyzing...
-              </>
+              </span>
             ) : (
-              <>
+              <span key="idle" className="flex items-center">
                 <Brain size={16} className="mr-2 group-hover:scale-110 transition-transform" />
                 Start AI Diagnostic Analysis
-              </>
+              </span>
             )}
           </Button>
           <Button

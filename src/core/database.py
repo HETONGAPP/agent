@@ -84,6 +84,24 @@ class RuleModel(Base):
     site = relationship("SiteModel")
 
 
+class DiagnosticModel(Base):
+    """Diagnostic metadata database model"""
+    __tablename__ = "diagnostics"
+
+    alarm_id = Column(String(100), primary_key=True)  # Use alarm_id as primary key
+    site_id = Column(String(100), nullable=True)  # Optional site ID
+    device_id = Column(String(100), nullable=True)  # Optional device ID
+    device_type = Column(String(50), nullable=True)  # Optional device type
+    alarm_type = Column(String(100), nullable=True)  # Optional alarm type
+    risk_level = Column(String(20), nullable=False)  # High, Medium, Low
+    current_status = Column(Text, nullable=True)  # Current status summary
+    diagnostic_name = Column(String(200), nullable=True)  # Optional diagnostic name/title
+    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)  # When diagnostic was generated
+    created_at = Column(DateTime, default=datetime.utcnow)  # When record was created in DB
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # When record was last updated
+    diagnostic_metadata = Column("metadata", JSON, nullable=True)  # Use diagnostic_metadata as attribute name, but keep "metadata" as column name
+
+
 class Database:
     """Database connection and session management"""
 

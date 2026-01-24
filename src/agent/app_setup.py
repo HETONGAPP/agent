@@ -180,11 +180,12 @@ async def lifespan(app: FastAPI):
         pg_config = db_config.get("postgresql", {})
         
         if pg_config.get("password") or os.getenv("DB_PASSWORD"):
-            # Import RuleModel to ensure it's registered with Base.metadata before database initialization
-            from ..core.database import RuleModel  # noqa: F401
+            # Import models to ensure they're registered with Base.metadata before database initialization
+            from ..core.database import RuleModel, DiagnosticModel  # noqa: F401
             database = get_database(config=pg_config)
             from ..storage.postgresql_metadata import PostgreSQLMetadataStorage
             postgres_metadata_storage = PostgreSQLMetadataStorage(database)
+            set_app_state(postgres_metadata_storage=postgres_metadata_storage)
             logger.info("✓ PostgreSQL metadata storage initialized")
         else:
             logger.info("ℹ PostgreSQL not configured (no password), skipping PostgreSQL storage")

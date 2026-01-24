@@ -428,6 +428,34 @@ export const DiagnosticReports = () => {
       {useMemo(() => {
         if (!deferredStats) return null;
         const isPending = deferredStats !== stats;
+        
+        // Normalize risk level keys to handle case sensitivity issues
+        const byRiskLevel = deferredStats.by_risk_level || {};
+        const high = byRiskLevel.High || byRiskLevel.high || 0;
+        const medium = byRiskLevel.Medium || byRiskLevel.medium || 0;
+        const low = byRiskLevel.Low || byRiskLevel.low || 0;
+        
+        // Debug: Log stats and diagnostics to identify mismatch
+        if (diagnostics.length > 0 && deferredStats.total > 0) {
+          const diagnosticsByRisk = diagnostics.reduce((acc, d) => {
+            const level = d.risk_level || 'Unknown';
+            acc[level] = (acc[level] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          
+          // Only log if there's a mismatch
+          if (high !== (diagnosticsByRisk.High || diagnosticsByRisk.high || 0) ||
+              medium !== (diagnosticsByRisk.Medium || diagnosticsByRisk.medium || 0) ||
+              low !== (diagnosticsByRisk.Low || diagnosticsByRisk.low || 0)) {
+            console.log('[DiagnosticReports] Stats mismatch detected:', {
+              stats: { high, medium, low, total: deferredStats.total },
+              diagnostics: diagnosticsByRisk,
+              diagnosticsCount: diagnostics.length,
+              byRiskLevel,
+            });
+          }
+        }
+        
         return (
           <div className={`grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity duration-300 ${isPending ? 'opacity-60' : 'opacity-100'}`}>
             <div className="card transition-all duration-200">
@@ -436,19 +464,19 @@ export const DiagnosticReports = () => {
             </div>
             <div className="card transition-all duration-200">
               <div className="text-sm text-gray-400">High Risk</div>
-              <div className="text-2xl font-bold text-red-400 transition-all duration-200">{deferredStats.by_risk_level?.High || 0}</div>
+              <div className="text-2xl font-bold text-red-400 transition-all duration-200">{high}</div>
             </div>
             <div className="card transition-all duration-200">
               <div className="text-sm text-gray-400">Medium Risk</div>
-              <div className="text-2xl font-bold text-yellow-400 transition-all duration-200">{deferredStats.by_risk_level?.Medium || 0}</div>
+              <div className="text-2xl font-bold text-yellow-400 transition-all duration-200">{medium}</div>
             </div>
             <div className="card transition-all duration-200">
               <div className="text-sm text-gray-400">Low Risk</div>
-              <div className="text-2xl font-bold text-green-400 transition-all duration-200">{deferredStats.by_risk_level?.Low || 0}</div>
+              <div className="text-2xl font-bold text-green-400 transition-all duration-200">{low}</div>
             </div>
           </div>
         );
-      }, [deferredStats, stats])}
+      }, [deferredStats, stats, diagnostics])}
 
       {/* Search and Filters */}
       <FilterBar 

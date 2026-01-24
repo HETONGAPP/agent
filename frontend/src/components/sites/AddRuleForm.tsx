@@ -257,11 +257,13 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
       initialRule.actions.forEach((action: any) => {
         if (typeof action === 'string') {
           if (action === 'send_email') {
-            actionMap.set(action, { name: action, enabled: true });
+            // String format means it was enabled in old format, but default to disabled
+            actionMap.set(action, { name: action, enabled: false });
           }
         } else if (action.name) {
           if (action.name === 'send_email') {
-            actionMap.set(action.name, { name: action.name, enabled: action.enabled !== false });
+            // Only enable if explicitly set to true
+            actionMap.set(action.name, { name: action.name, enabled: action.enabled === true });
           }
         }
       });

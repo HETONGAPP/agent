@@ -155,53 +155,67 @@ class SiteManager:
     def get_site_rules(self, site_id: str) -> List[Dict[str, Any]]:
         """
         Get site-specific rules
-        Priority: PostgreSQL (primary) > InfluxDB (container) > File > Cache
+        Merges rules from PostgreSQL (primary) and InfluxDB (container) to ensure all rules are included
         Global rules are loaded from file, site rules are loaded from PostgreSQL first, then InfluxDB, then file as fallback
 
         Args:
             site_id: Site ID
 
         Returns:
-            List of site-specific rules
+            List of site-specific rules (merged from all sources)
         """
         # Check cache first
         if site_id in self._site_rules_cache:
             return self._site_rules_cache[site_id].copy()
 
-        # Try to get from PostgreSQL first (primary storage)
+        all_rules = []
+        rule_ids_seen = set()
+
+        # Get rules from PostgreSQL (primary storage)
+        postgres_rules = []
         if self._postgres_storage:
             try:
-                rules = self._postgres_storage.get_rules_by_site(site_id, enabled_only=False)
-                if rules:
-                    # Cache the result
-                    self._site_rules_cache[site_id] = rules
-                    logger.debug(f"Loaded {len(rules)} rules from PostgreSQL for site {site_id}")
-                    return rules.copy()
+                postgres_rules = self._postgres_storage.get_rules_by_site(site_id, enabled_only=False)
+                if postgres_rules:
+                    logger.debug(f"Loaded {len(postgres_rules)} rules from PostgreSQL for site {site_id}")
+                    # Add PostgreSQL rules to result
+                    for rule in postgres_rules:
+                        rule_id = rule.get("id")
+                        if rule_id and rule_id not in rule_ids_seen:
+                            all_rules.append(rule)
+                            rule_ids_seen.add(rule_id)
             except Exception as e:
                 logger.warning(f"Failed to load rules from PostgreSQL for site {site_id}: {e}, trying InfluxDB")
 
-        # Try to get from InfluxDB container (secondary storage)
+        # Get rules from InfluxDB container (secondary storage) and merge
         if self._container_manager:
             try:
                 container = self._container_manager.get_container(site_id, auto_create=False)
                 if container:
-                    rules = container.query_rules()
-                    if rules:
-                        # Cache the result
-                        self._site_rules_cache[site_id] = rules
-                        # Sync to PostgreSQL if available
-                        if self._postgres_storage:
-                            try:
-                                for rule in rules:
-                                    self._postgres_storage.save_rule(site_id, rule)
-                            except Exception as e:
-                                logger.warning(f"Failed to sync rules to PostgreSQL: {e}")
-                        logger.debug(f"Loaded {len(rules)} rules from InfluxDB for site {site_id}")
-                        return rules.copy()
-                    else:
-                        logger.debug(f"No rules found in InfluxDB for site {site_id}, falling back to file")
+                    influxdb_rules = container.query_rules()
+                    if influxdb_rules:
+                        logger.debug(f"Loaded {len(influxdb_rules)} rules from InfluxDB for site {site_id}")
+                        # Merge InfluxDB rules (add only if not already in PostgreSQL rules)
+                        for rule in influxdb_rules:
+                            rule_id = rule.get("id")
+                            if rule_id and rule_id not in rule_ids_seen:
+                                all_rules.append(rule)
+                                rule_ids_seen.add(rule_id)
+                                # Sync to PostgreSQL if available (for future queries)
+                                if self._postgres_storage:
+                                    try:
+                                        self._postgres_storage.save_rule(site_id, rule)
+                                    except Exception as e:
+                                        logger.debug(f"Failed to sync rule {rule_id} to PostgreSQL: {e}")
             except Exception as e:
-                logger.warning(f"Failed to load rules from InfluxDB for site {site_id}: {e}, falling back to file")
+                logger.warning(f"Failed to load rules from InfluxDB for site {site_id}: {e}")
+
+        # If we have rules from database, return them
+        if all_rules:
+            # Cache the result
+            self._site_rules_cache[site_id] = all_rules
+            logger.debug(f"Returning {len(all_rules)} merged rules for site {site_id} (PostgreSQL: {len(postgres_rules)}, InfluxDB: {len(all_rules) - len(postgres_rules)})")
+            return all_rules.copy()
 
         # Fallback to file if database has no rules
         if not self.site_rules_dir:
@@ -924,7 +938,7 @@ class SiteManager:
             existing_rules = container.query_rules()
             existing_rule_ids = {rule.get("id") for rule in existing_rules if rule.get("id")}
             
-            # Write device-specific rules to container database
+            # Write device-specific rules to both PostgreSQL (primary) and InfluxDB container (secondary)
             created_count = 0
             for rule in applicable_rules:
                 rule_id = rule.get("id")
@@ -936,7 +950,17 @@ class SiteManager:
                     logger.debug(f"Rule {rule_id} already exists for device {device_id}, skipping")
                     continue
                 
-                # Write rule to container
+                # Save to PostgreSQL first (primary storage)
+                if self._postgres_storage:
+                    try:
+                        if self._postgres_storage.save_rule(site_id, rule):
+                            logger.debug(f"Saved rule {rule_id} to PostgreSQL for device {device_id}")
+                        else:
+                            logger.warning(f"Failed to save rule {rule_id} to PostgreSQL for device {device_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to save rule {rule_id} to PostgreSQL: {e}")
+                
+                # Also save to InfluxDB container (secondary storage) - dual write
                 if container.write_rule(rule, flush=False):
                     created_count += 1
                     logger.debug(f"Created rule {rule_id} for device {device_id}")

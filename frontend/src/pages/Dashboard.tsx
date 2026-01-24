@@ -10,8 +10,7 @@ import { useDevices } from '@/hooks/useDevices';
 import { useAlarms } from '@/hooks/useAlarms';
 import { useDiagnostics } from '@/hooks/useDiagnostics';
 import { useRealtime } from '@/hooks/useRealtime';
-import { useWebSocket, EventType } from '@/hooks/useWebSocket';
-import { websocketEventManager } from '@/services/websocketEventManager';
+import { useWebSocket, type EventType } from '@/hooks/useWebSocket';
 import { formatNumber } from '@/utils/format';
 import { Plug, Bell, FileText, AlertTriangle } from 'lucide-react';
 
@@ -24,14 +23,15 @@ export const Dashboard = () => {
     fetchDeviceStats();
     fetchAlarmStats();
     fetchDiagnosticStats();
-  }, [fetchDeviceStats, fetchAlarmStats, fetchDiagnosticStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only execute once on component mount
 
   // WebSocket for real-time updates
-  const wsEvents = useCallback(() => ['alarm_created', 'alarm_updated', 'stats_updated'], []);
+  const wsEvents: EventType[] = ['alarm_created', 'alarm_updated', 'stats_updated'];
   const { connected } = useWebSocket({
     enabled: true,
-    events: wsEvents(),
-    onMessage: useCallback((message) => {
+    events: wsEvents,
+    onMessage: useCallback((message: { type: EventType; data?: any }) => {
       // Refresh stats when alarms are created/updated or stats are updated
       if (message.type === 'alarm_created' || message.type === 'alarm_updated' || message.type === 'stats_updated') {
         fetchAlarmStats();
@@ -40,7 +40,6 @@ export const Dashboard = () => {
       }
     }, [fetchAlarmStats, fetchDiagnosticStats, fetchDeviceStats]),
     onConnect: useCallback(() => {
-      console.log('Dashboard: WebSocket connected, fetching data');
       fetchDeviceStats();
       fetchAlarmStats();
       fetchDiagnosticStats();

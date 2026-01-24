@@ -136,7 +136,11 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
       if (response.status === 'success' && response.data) {
         set({ stats: response.data });
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Silently handle request cancellation errors (normal when component unmounts)
+      if (error?.message?.includes('aborted') || error?.code === 'ERR_CANCELED' || error?.name === 'AbortError') {
+        return; // Silently ignore cancelled requests
+      }
       console.error('Failed to fetch device stats:', error);
     }
   },

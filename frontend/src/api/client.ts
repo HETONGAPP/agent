@@ -141,6 +141,14 @@ export const apiRequest = async <T>(
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        // Silently handle request cancellation errors (normal when component unmounts)
+        if (error.code === 'ERR_CANCELED' || error.message?.toLowerCase().includes('aborted')) {
+          return {
+            status: 'error',
+            message: 'Request aborted',
+          };
+        }
+
         // Retry on 429 if enabled
         if (error.response?.status === 429 && retryOn429) {
           const retryAfter = error.response.headers['retry-after'];

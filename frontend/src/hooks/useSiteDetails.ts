@@ -26,8 +26,8 @@ export interface UseSiteDetailsReturn {
   error: string | null;
   
   // UI state
-  activeTab: 'overview' | 'devices' | 'rules' | 'settings';
-  setActiveTab: (tab: 'overview' | 'devices' | 'rules' | 'settings') => void;
+  activeTab: 'overview' | 'devices' | 'alarms' | 'rules' | 'settings';
+  setActiveTab: (tab: 'overview' | 'devices' | 'alarms' | 'rules' | 'settings') => void;
   showAddDeviceModal: boolean;
   setShowAddDeviceModal: (show: boolean) => void;
   showAddRuleModal: boolean;

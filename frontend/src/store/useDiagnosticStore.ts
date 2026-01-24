@@ -136,6 +136,10 @@ export const useDiagnosticStore = create<DiagnosticStore>((set, get) => ({
         }
       }
     } catch (error: any) {
+      // Silently handle request cancellation errors (normal when component unmounts)
+      if (error?.message?.includes('aborted') || error?.code === 'ERR_CANCELED' || error?.name === 'AbortError') {
+        return; // Silently ignore cancelled requests
+      }
       console.error('Failed to fetch diagnostic stats:', error);
       // Don't set error state for stats, just log it
     }

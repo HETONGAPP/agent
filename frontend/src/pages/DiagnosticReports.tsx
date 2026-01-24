@@ -15,7 +15,6 @@ import { Pagination } from '@/components/ui/Pagination';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Diagnostic, DiagnosticFilters } from '@/types';
-import { RISK_LEVELS } from '@/config/constants';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/date';
 import { exportDiagnostics } from '@/utils/export';
 import { exportMultipleDiagnosticsToPDF } from '@/utils/pdf';
@@ -50,7 +49,7 @@ export const DiagnosticReports = () => {
     setFilters,
     setPagination,
     setSelectedDiagnostic,
-  } = useDiagnostics(true);
+  } = useDiagnostics(false); // Disable auto-fetch, let component control when to fetch
 
   // Use deferred value for stats to prevent UI flashing during updates
   // This makes stats updates non-blocking and smooth
@@ -87,8 +86,15 @@ export const DiagnosticReports = () => {
 
   // Initial data fetch on mount - ensure data is loaded immediately
   useEffect(() => {
-    console.log('DiagnosticReports mounted, fetching initial data');
-    fetchDiagnostics(filters, pagination.limit, pagination.offset);
+    // Only use filters if explicitly navigating from another page (shouldHighlight = true)
+    // Otherwise, fetch all diagnostics to show the complete list
+    const initialFilters = (shouldHighlight && (alarmIdParam || siteIdParam)) ? filters : {};
+    fetchDiagnostics(initialFilters, pagination.limit, pagination.offset);
+    // Also update local filters to match
+    if (!shouldHighlight || !(alarmIdParam || siteIdParam)) {
+      setLocalFilters({});
+      setFilters({});
+    }
     // Delay stats fetch to avoid blocking the initial render
     setTimeout(() => {
       fetchStats();
@@ -625,7 +631,11 @@ export const DiagnosticReports = () => {
         data={filteredDiagnostics}
         columns={columns}
         loading={loading}
-        emptyMessage="No diagnostic reports found"
+        emptyMessage={
+          diagnostics.length === 0 && !loading
+            ? `No diagnostic reports found${filters.alarm_id || filters.site_id ? ' matching the current filters' : ''}. ${stats?.total ? `Total reports in system: ${stats.total}` : ''}`
+            : 'No diagnostic reports found'
+        }
         highlightedRowKey="alarm_id"
         highlightedRowValue={highlightedAlarmId}
       />

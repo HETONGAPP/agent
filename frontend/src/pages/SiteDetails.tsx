@@ -3,9 +3,9 @@
  * Shows detailed information about a specific site
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Clock, Settings, RefreshCw, Edit, Trash2, Brain, X } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Settings, RefreshCw, Edit, Trash2, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Modal } from '@/components/ui/Modal';
@@ -22,15 +22,23 @@ import { SiteDeleteModal } from '@/components/sites/SiteDeleteModal';
 import { SiteRemoveDeviceModal } from '@/components/sites/SiteRemoveDeviceModal';
 import { useSiteDetails } from '@/hooks/useSiteDetails';
 import { useToastStore } from '@/store/useToastStore';
-import { updateSiteRule, generateSiteDiagnostic } from '@/api/sites';
+import { useSiteDiagnosticStore } from '@/store/useSiteDiagnosticStore';
+import { updateSiteRule, generateSiteDiagnostic, getSiteDiagnostics } from '@/api/sites';
 import { Device, Diagnostic } from '@/types';
-import { Badge } from '@/components/ui/Badge';
 import { DiagnosticOutput } from '@/components/diagnostics/DiagnosticOutput';
 
 export const SiteDetails = () => {
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
   const { addToast } = useToastStore();
+  
+  // Use global diagnostic store for persistent state
+  const {
+    isGeneratingForSite,
+    startDiagnostic,
+    completeDiagnostic,
+    getDiagnosticState,
+  } = useSiteDiagnosticStore();
 
   const {
     // Site data
@@ -79,7 +87,6 @@ export const SiteDetails = () => {
     availableMetrics,
     
     // WebSocket
-    connected,
     isSiteAlive,
     
     // Actions
@@ -96,11 +103,160 @@ export const SiteDetails = () => {
   const [showEditDeviceModal, setShowEditDeviceModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
 
-  // Diagnostic state
-  const [isGeneratingDiagnostic, setIsGeneratingDiagnostic] = useState(false);
+  // Diagnostic state - use global store for persistent state
+  // Check if generating, but also verify it hasn't timed out
+  const isGeneratingDiagnostic = siteId ? isGeneratingForSite(siteId) : false;
   const [diagnosticResult, setDiagnosticResult] = useState<Diagnostic | null>(null);
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
-  const [diagnosticTimeRange, setDiagnosticTimeRange] = useState<string>('-24h');
+  const [diagnosticTimeRange] = useState<string>('-24h'); // Time range for diagnostic (currently fixed to -24h)
+  
+  // Use ref to track component mount status
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    // Set mounted flag on mount
+    isMountedRef.current = true;
+    
+    return () => {
+      // Set unmounted flag on unmount
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  // Check for persisted diagnostic state on mount and validate if diagnostic actually completed
+  useEffect(() => {
+    if (!siteId) {
+      return;
+    }
+    
+    // Get current diagnostic state
+    const currentState = getDiagnosticState(siteId);
+    if (!currentState || !currentState.isGenerating || !currentState.startTime) {
+      // No active diagnostic, nothing to check
+      return;
+    }
+    
+    const checkDiagnosticStatus = async () => {
+      // Re-get state in case it changed
+      const state = getDiagnosticState(siteId);
+      if (!state || !state.isGenerating || !state.startTime) {
+        console.log('[SiteDetails] Diagnostic state no longer active, stopping check');
+        return;
+      }
+      
+      const startTime = state.startTime; // Use state.startTime, not diagnosticState
+      const startTimeISO = new Date(startTime).toISOString();
+      console.log(`[SiteDetails] Checking diagnostic status. Start time: ${startTimeISO} (${startTime})`);
+      
+      try {
+        // Check if there's a new diagnostic record created after the start time
+        // Query diagnostics from start time to now
+        const response = await getSiteDiagnostics(siteId, {
+          start_time: startTimeISO,
+          limit: 10, // Check last 10 diagnostics
+        });
+        
+        console.log('[SiteDetails] Diagnostic query response:', response);
+        
+        if (response.status === 'success' && response.data) {
+          const diagnostics = Array.isArray(response.data) ? response.data : response.data.diagnostics || [];
+          console.log(`[SiteDetails] Found ${diagnostics.length} diagnostic records`);
+          
+          // Check if any diagnostic was created after our start time
+          // We need to be more strict: diagnostic must be created AFTER start time (not before)
+          const hasNewDiagnostic = diagnostics.some((diag: any) => {
+            // Try multiple possible timestamp fields
+            const diagTime = diag.generated_at || diag.timestamp || diag._time;
+            if (!diagTime) {
+              console.log('[SiteDetails] Diagnostic record missing timestamp:', diag);
+              return false;
+            }
+            
+            // Parse timestamp (could be ISO string or timestamp)
+            let diagTimestamp: number;
+            try {
+              if (typeof diagTime === 'string') {
+                diagTimestamp = new Date(diagTime).getTime();
+                // Handle invalid date
+                if (isNaN(diagTimestamp)) {
+                  console.log('[SiteDetails] Invalid date string:', diagTime);
+                  return false;
+                }
+              } else if (typeof diagTime === 'number') {
+                diagTimestamp = diagTime;
+              } else {
+                console.log('[SiteDetails] Unknown timestamp format:', diagTime, typeof diagTime);
+                return false;
+              }
+              
+              // Check if diagnostic was created after start time
+              // Use a small buffer (2 seconds) to account for processing time
+              const timeDiff = diagTimestamp - startTime;
+              const isNew = timeDiff >= -2000; // Allow 2 second buffer
+              
+              if (isNew) {
+                console.log(`[SiteDetails] ✓ Found new diagnostic: ${diag.alarm_id || 'unknown'}`);
+                console.log(`  - Diagnostic time: ${new Date(diagTimestamp).toISOString()} (${diagTimestamp})`);
+                console.log(`  - Start time: ${startTimeISO} (${startTime})`);
+                console.log(`  - Time difference: ${timeDiff}ms`);
+              } else {
+                console.log(`[SiteDetails] ✗ Diagnostic too old: ${diag.alarm_id || 'unknown'}, diff: ${timeDiff}ms`);
+              }
+              
+              return isNew;
+            } catch (parseError) {
+              console.error('[SiteDetails] Error parsing timestamp:', diagTime, parseError);
+              return false;
+            }
+          });
+          
+          if (hasNewDiagnostic) {
+            // Diagnostic has completed, update state
+            console.log('[SiteDetails] Found new diagnostic record, completing state');
+            completeDiagnostic(siteId);
+          } else {
+            console.log('[SiteDetails] No new diagnostic found yet, continuing to wait');
+          }
+        } else {
+          console.log('[SiteDetails] Diagnostic query failed or no data:', response);
+        }
+      } catch (error) {
+        console.error('[SiteDetails] Error checking diagnostic status:', error);
+        // Don't fail silently - if check fails, we'll rely on timeout
+      }
+    };
+    
+    // Check immediately on mount
+    checkDiagnosticStatus();
+    
+    // Also set up periodic check every 5 seconds while generating (more frequent for better UX)
+    const intervalId = window.setInterval(() => {
+      // Re-check if still generating (state might have changed)
+      const currentState = getDiagnosticState(siteId);
+      if (!siteId || !currentState || !currentState.isGenerating || !isGeneratingForSite(siteId)) {
+        console.log('[SiteDetails] Diagnostic no longer generating, stopping polling');
+        window.clearInterval(intervalId);
+        return;
+      }
+      
+      // Call async function without awaiting (fire and forget)
+      checkDiagnosticStatus().catch((err) => {
+        console.error('[SiteDetails] Error in periodic diagnostic check:', err);
+      });
+    }, 5000); // Check every 5 seconds for faster detection
+    
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [siteId, getDiagnosticState, completeDiagnostic, isGeneratingForSite]);
+  
+  // Cleanup: Ensure state is reset if component unmounts and diagnostic completes
+  useEffect(() => {
+    return () => {
+      // Don't reset on unmount - we want to preserve state for when user returns
+      // The timeout check in the store will handle stale states
+    };
+  }, []);
 
   // Check if we should show loading state
   if (loading) {
@@ -229,26 +385,65 @@ export const SiteDetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Diagnostic Progress Indicator */}
+          {isGeneratingDiagnostic && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+              <span className="text-xs text-purple-300">Analyzing...</span>
+            </div>
+          )}
+          
           <Button
             variant="primary"
             size="sm"
             onClick={async () => {
               if (!siteId) return;
-              setIsGeneratingDiagnostic(true);
+              
+              // Start diagnostic state with current timestamp
+              const diagnosticStartTime = Date.now();
+              startDiagnostic(siteId);
+              
+              console.log(`[SiteDetails] Starting diagnostic for site ${siteId} at ${new Date(diagnosticStartTime).toISOString()}`);
+              
               try {
                 const response = await generateSiteDiagnostic(siteId, diagnosticTimeRange);
+                
+                console.log(`[SiteDetails] Diagnostic API call completed for site ${siteId}`);
+                
+                // Check if component is still mounted before updating UI state
+                if (!isMountedRef.current) {
+                  // Component unmounted during API call
+                  // Don't complete state here - let the polling mechanism detect completion
+                  console.log('[SiteDetails] Component unmounted, state will be checked by polling');
+                  return;
+                }
+                
+                // Verify the diagnostic was actually created by checking the response
                 if (response.status === 'success' && response.data) {
+                  // Diagnostic completed successfully
+                  console.log('[SiteDetails] Diagnostic completed successfully, updating state');
+                  completeDiagnostic(siteId);
+                  
                   setDiagnosticResult(response.data);
                   setShowDiagnosticModal(true);
                   addToast('AI diagnostic analysis completed', 'success');
                 } else {
+                  // Diagnostic failed
+                  console.log('[SiteDetails] Diagnostic failed:', response.message);
+                  completeDiagnostic(siteId);
                   addToast(response.message || 'Failed to generate diagnostic', 'error');
                 }
               } catch (error: any) {
-                console.error('Error generating diagnostic:', error);
-                addToast(error?.message || 'Failed to generate diagnostic', 'error');
-              } finally {
-                setIsGeneratingDiagnostic(false);
+                console.error('[SiteDetails] Error generating diagnostic:', error);
+                
+                // Only complete state if component is still mounted
+                // If unmounted, let polling mechanism handle it
+                if (isMountedRef.current && siteId) {
+                  completeDiagnostic(siteId);
+                  addToast(error?.message || 'Failed to generate diagnostic', 'error');
+                } else {
+                  console.log('[SiteDetails] Component unmounted during error, state will be checked by polling');
+                }
               }
             }}
             disabled={isGeneratingDiagnostic || !siteId}

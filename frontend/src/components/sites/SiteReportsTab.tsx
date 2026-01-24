@@ -168,9 +168,15 @@ export const SiteReportsTab = ({ siteId }: SiteReportsTabProps) => {
     {
       key: 'risk_level',
       header: 'Risk Level',
-      render: (diagnostic) => (
-        <Badge type="risk" value={diagnostic.risk_level} size="sm" />
-      ),
+      render: (diagnostic) => {
+        // Ensure risk_level exists and is valid
+        const riskLevel = diagnostic?.risk_level || (diagnostic as any)?.risk_level || 'Low';
+        // Normalize risk level value
+        const normalizedRiskLevel = String(riskLevel).trim() || 'Low';
+        return (
+          <Badge type="risk" value={normalizedRiskLevel} size="sm" />
+        );
+      },
     },
     {
       key: 'current_status',

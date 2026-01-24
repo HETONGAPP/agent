@@ -26,8 +26,8 @@ export interface UseSiteDetailsReturn {
   error: string | null;
   
   // UI state
-  activeTab: 'overview' | 'devices' | 'alarms' | 'rules' | 'settings';
-  setActiveTab: (tab: 'overview' | 'devices' | 'alarms' | 'rules' | 'settings') => void;
+  activeTab: 'overview' | 'devices' | 'alarms' | 'reports' | 'rules' | 'settings';
+  setActiveTab: (tab: 'overview' | 'devices' | 'alarms' | 'reports' | 'rules' | 'settings') => void;
   showAddDeviceModal: boolean;
   setShowAddDeviceModal: (show: boolean) => void;
   showAddRuleModal: boolean;
@@ -95,7 +95,7 @@ export const useSiteDetails = ({ siteId }: UseSiteDetailsOptions): UseSiteDetail
   const { removeDevice: removeDeviceFromStore } = useDeviceStore();
 
   // UI state
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'alarms' | 'rules' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'alarms' | 'reports' | 'rules' | 'settings'>('overview');
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [showAddRuleModal, setShowAddRuleModal] = useState(false);
   const [showEditRuleModal, setShowEditRuleModal] = useState(false);

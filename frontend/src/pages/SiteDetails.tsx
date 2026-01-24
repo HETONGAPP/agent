@@ -18,6 +18,7 @@ import { SiteDevicesTab } from '@/components/sites/SiteDevicesTab';
 import { SiteRulesTab } from '@/components/sites/SiteRulesTab';
 import { SiteSettingsTab } from '@/components/sites/SiteSettingsTab';
 import { SiteAlarmsTab } from '@/components/sites/SiteAlarmsTab';
+import { SiteReportsTab } from '@/components/sites/SiteReportsTab';
 import { SiteDeleteModal } from '@/components/sites/SiteDeleteModal';
 import { SiteRemoveDeviceModal } from '@/components/sites/SiteRemoveDeviceModal';
 import { useSiteDetails } from '@/hooks/useSiteDetails';
@@ -586,7 +587,7 @@ export const SiteDetails = () => {
       {/* Tabs */}
       <div className="border-b border-gray-700/50">
         <nav className="flex space-x-1">
-          {(['overview', 'devices', 'alarms', 'rules', 'settings'] as const).map((tab) => (
+          {(['overview', 'devices', 'alarms', 'reports', 'rules', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -644,6 +645,10 @@ export const SiteDetails = () => {
 
         {activeTab === 'alarms' && siteId && (
           <SiteAlarmsTab siteId={siteId} />
+        )}
+
+        {activeTab === 'reports' && siteId && (
+          <SiteReportsTab siteId={siteId} />
         )}
 
         {activeTab === 'rules' && (

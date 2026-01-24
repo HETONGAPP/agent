@@ -62,7 +62,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
     setFilters(initialFilters);
     setLocalFilters(initialFilters);
     // Set pagination limit to 15
-    setPagination({ ...pagination, limit: 15 });
+    setPagination(15, 0);
     // When querying a specific site, don't use aggregate_by_site (we want all alarms)
     fetchAlarms(initialFilters, 15, 0, false);
     fetchStats();
@@ -119,7 +119,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
   const handlePageChange = (page: number) => {
     const limit = 15;
     const offset = (page - 1) * limit;
-    setPagination({ ...pagination, limit, offset });
+    setPagination(limit, offset);
     // When querying a specific site, don't use aggregate_by_site (we want all alarms)
     fetchAlarms(filters, limit, offset, false);
   };
@@ -298,7 +298,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
       )}
 
       {/* Pagination */}
-      {pagination.total > 0 && (
+      {!loading && alarms.length > 0 && pagination.total > 0 && (
         <div className="mt-4">
           <Pagination
             currentPage={Math.floor(pagination.offset / 15) + 1}

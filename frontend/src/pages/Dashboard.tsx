@@ -426,7 +426,7 @@ export const Dashboard = () => {
             </div>
           </div>
           {alarmChartData.length > 0 ? (
-            <Chart data={alarmChartData} type="bar" height={240} showGrid={true} />
+            <Chart data={alarmChartData} type="pie" height={240} showLegend={true} />
           ) : (
             <div className="flex items-center justify-center h-[240px] text-gray-400">
               <div className="text-center">

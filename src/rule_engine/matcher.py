@@ -84,11 +84,17 @@ class RuleMatcher:
         Check if rule is applicable to device data
         
         Rules are matched based on:
-        1. Site ID: Rules are already filtered by site_id in RuleEngine.evaluate()
-        2. Device Type: Rule's device_types must include device's type (except EMS rules)
-        3. Device ID: If rule has device_ids, device must be in the list (empty device_ids = all devices)
-        4. EMS (GLOBAL) rules: Match all devices in the site (device_types contains "EMS")
+        1. Rule must be enabled (enabled != False)
+        2. Site ID: Rules are already filtered by site_id in RuleEngine.evaluate()
+        3. Device Type: Rule's device_types must include device's type (except EMS rules)
+        4. Device ID: If rule has device_ids, device must be in the list (empty device_ids = all devices)
+        5. EMS (GLOBAL) rules: Match all devices in the site (device_types contains "EMS")
         """
+        # Check if rule is enabled (default to True if not specified)
+        rule_enabled = rule.get("enabled")
+        if rule_enabled is False:
+            return False
+        
         rule_device_types = rule.get("device_types", [])
         rule_device_ids = rule.get("device_ids", [])
         

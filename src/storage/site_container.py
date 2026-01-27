@@ -183,8 +183,13 @@ class SiteContainer:
     # ==================== Alarm Operations ====================
     
     def write_alarm(self, alarm: Alarm, flush: bool = False):
-        """Write alarm to site container"""
+        """
+        Write alarm to site container
+        Only keeps the latest snapshot for each alarm type (and device_id if present)
+        Note: The deletion of old alarms is handled by InfluxDBClient.write_alarm()
+        """
         # Pass site_id to ensure it's stored correctly
+        # The deletion of old alarms is handled in InfluxDBClient.write_alarm()
         return self.influx_client.write_alarm(alarm, flush=flush, site_id=self.site_id)
 
     def query_alarms(

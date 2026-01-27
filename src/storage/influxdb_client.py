@@ -142,12 +142,57 @@ class InfluxDBClient:
     ):
         """
         Write alarm data with multi-site support
+        Only keeps the latest snapshot for each alarm type (and device_id if present)
 
         Args:
             alarm: Alarm object
             flush: If True, immediately flush buffer (default: False, batch write)
             site_id: Optional site ID for multi-site support
         """
+        # Delete old alarms of the same type before writing new one
+        # This ensures only the latest snapshot is stored for each alarm type
+        if INFLUXDB_AVAILABLE:
+            try:
+                from datetime import datetime, timedelta, UTC
+                
+                device_id = alarm.metadata.get("device_id")
+                
+                delete_api = self.client.delete_api()
+                
+                # Delete from last 90 days to future (covers all recent alarms)
+                start_time = datetime.now(UTC) - timedelta(days=90)
+                stop_time = datetime.now(UTC) + timedelta(days=1)
+                
+                # Build predicate to match alarm_type and device_id (if present)
+                predicate = '_measurement="alarms"'
+                predicate += f' AND alarm_type="{alarm.alarm_type}"'
+                
+                if device_id:
+                    predicate += f' AND device_id="{device_id}"'
+                
+                # Add site_id to predicate if available
+                if site_id:
+                    predicate += f' AND site_id="{site_id}"'
+                elif alarm.metadata.get("site_id"):
+                    predicate += f' AND site_id="{alarm.metadata.get("site_id")}"'
+                
+                try:
+                    delete_api.delete(
+                        start=start_time,
+                        stop=stop_time,
+                        predicate=predicate,
+                        bucket=self.bucket,
+                        org=self.org
+                    )
+                    logger.debug(f"Deleted old alarm(s) of type {alarm.alarm_type} "
+                               f"{f'for device {device_id}' if device_id else ''} before writing new snapshot")
+                except Exception as e:
+                    logger.warning(f"Failed to delete old alarms before writing new one: {e}")
+                    # Continue anyway - write the new alarm
+            except Exception as e:
+                logger.warning(f"Error deleting old alarms: {e}")
+                # Continue anyway - write the new alarm
+        
         point = (
             Point("alarms")
             .tag("alarm_id", alarm.alarm_id)

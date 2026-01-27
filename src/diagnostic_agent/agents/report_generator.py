@@ -424,17 +424,21 @@ Generate a comprehensive diagnostic report for Site {site_id} using this format:
    - If single device type: Mention this context
    - Be honest about what you know vs. what you don't know
 
-**CRITICAL: The "Data Availability Summary" is the SOURCE OF TRUTH. If it shows alarms exist, you CANNOT say "No alarms detected" - this is a contradiction that will confuse readers.**]
+**CRITICAL: The "Data Availability Summary" is the SOURCE OF TRUTH. If it shows alarms exist, you CANNOT say "No alarms detected" - this is a contradiction that will confuse readers.**
+
+**IMPORTANT: DO NOT include Risk Level or Why Analysis in Current Status section. Keep it concise - only 2-3 sentences about the current situation.**]
 
 ## Risk Level
 
 [Write: Low, Medium, or High]
 
 [Write 1 sentence explaining why this risk level was assigned.
-- Apply 5 Why analysis: Why is this the risk level? What evidence supports it?
+- Apply 5 Why analysis internally (think through it), but DO NOT write out the analysis process
 - If no alarms and no issues found, the risk level MUST be Low
 - If only device registration exists, risk is Low (registration ≠ operational issues)
-- Be specific about what evidence led to this assessment]
+- Be specific about what evidence led to this assessment
+- **IMPORTANT: Only include ONE "Risk Level" section. Do NOT create a separate "Risk Assessment" section. The risk level must be consistent throughout the report.**
+- **DO NOT include "X Why Analysis" or analysis process in the output - only write the risk level and one sentence justification.**]
 
 ## Root Causes
 
@@ -442,9 +446,11 @@ Generate a comprehensive diagnostic report for Site {site_id} using this format:
 
 For each potential root cause, you MUST:
 1. Verify it's supported by actual data (alarms, device status, trends)
-2. Apply 5 Why analysis to trace back to the true root cause
+2. Apply 5 Why analysis internally to trace back to the true root cause (think through it, but DO NOT write out the analysis process)
 3. Validate: Is this correct? Is this a real problem? Is this specific?
 4. Only include if you can answer "yes" to all validation questions
+5. **Write COMPLETE explanations, not just questions or titles**
+6. **DO NOT include "Why did this happen?" questions or "X Why Analysis" sections - only write the final root cause statements**
 
 [IMPORTANT: 
 - **CRITICAL: Check alarm_count from "Data Availability Summary" - if > 0, alarms exist and you MUST analyze them**
@@ -454,11 +460,16 @@ For each potential root cause, you MUST:
 - If no historical data: State "Insufficient historical data to identify root causes related to trends or degradation."
 - Do NOT invent problems like "Temperature Sensor Malfunction" unless temperature sensor alarms or data explicitly indicate this
 - Do NOT use generic/vague root causes like "System needs monitoring" - be specific or state "No issues identified"
-- **DO NOT ignore alarms - if they are shown in the data, they are real and need to be addressed**]
+- **DO NOT ignore alarms - if they are shown in the data, they are real and need to be addressed**
+- **DO NOT write "Why did X occur?" questions - provide the complete answer/explanation directly**
+- **DO NOT include "5 Why Analysis" or analysis process in the output - only write the final root cause statements**
+- **Each root cause must be a complete statement explaining the cause, not a question or analysis process**]
 
 - [Only include root causes that pass the 5 Why and validation checks]
 - [If no issues found, state: "No significant issues identified based on available data"]
 - [Be specific: "Battery cell voltage deviation" not "System anomaly"]
+- [Write complete explanations: "The BMS detected high SOC due to charging operations exceeding normal thresholds" not "Why did SOC become high?"]
+- [Keep it concise - list 3-5 root causes, each as a single complete statement]
 
 ## Recommended Actions
 
@@ -466,18 +477,25 @@ For each potential root cause, you MUST:
 1. Relevant to actual findings (not fabricated problems)
 2. Actionable (someone can actually do this)
 3. Specific (not vague like "monitor system")
-4. Justified by the data]
+4. Justified by the data
+5. **Complete and self-contained - each action must be a full sentence explaining what to do, not just a title or incomplete phrase**
+6. **DO NOT include "X Why Analysis" or analysis process - only write the action statements**]
 
 [IMPORTANT:
 - If no issues were found: Recommend "Continue normal operations and monitoring" or "No immediate action required"
 - If only device registration: Recommend "Monitor device operational status as data becomes available"
 - If insufficient data: Recommend "Collect more operational data for comprehensive analysis"
 - Do NOT recommend actions for problems that were not identified
-- Avoid generic recommendations - be specific or state "No actions required"]
+- Avoid generic recommendations - be specific or state "No actions required"
+- **DO NOT write incomplete actions like "Review and Confirm Current Conditions:" - write the complete action: "Review and confirm current conditions by verifying the actual state of charge (SOC) to ensure it is within expected operating parameters"**
+- **Each action must be a complete, actionable statement that someone can follow without additional context**
+- **DO NOT include analysis process or "Why Analysis" sections - only write the action statements**]
 
 - [Only include actions relevant to actual findings]
 - [If no issues found, recommend: "Continue normal operations and monitoring"]
 - [Be specific: "Check battery cell #5 voltage readings" not "Monitor batteries"]
+- [Write complete actions: "Review and confirm current conditions by verifying SOC levels are within normal operating range (20-80%)" not "Review and Confirm Current Conditions:"]
+- [Keep it concise - list 3-5 actions, each as a single complete statement]
 
 ## References
 
@@ -529,6 +547,23 @@ Focus on accuracy, specificity, and actionable insights. Use clear, professional
         # Clean current_status using FormatterAgent
         cleaned_current_status = current_status or f"Diagnostic report for site {site_id}"
         if current_status:
+            # Remove analysis process content (Why Analysis, Risk Level mentions, etc.)
+            import re
+            # Remove "X Why Analysis" patterns
+            current_status = re.sub(r'\d+\s+Why\s+Analysis[:\-]?\s*', '', current_status, flags=re.IGNORECASE)
+            # Remove "Risk Level" mentions from Current Status
+            current_status = re.sub(r'-?\s*Risk\s+Level\s+(Low|Medium|High).*?\.', '', current_status, flags=re.IGNORECASE | re.DOTALL)
+            # Remove lines starting with "-" that contain analysis process
+            lines = current_status.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                line_stripped = line.strip()
+                # Skip lines that are analysis process indicators
+                if re.search(r'(Why\s+Analysis|Why\s+did|Why\s+is)', line_stripped, re.IGNORECASE):
+                    continue
+                cleaned_lines.append(line)
+            current_status = '\n'.join(cleaned_lines)
+            
             cleaned = await self.formatter.format_text(current_status)
             if cleaned:
                 cleaned = cleaned.strip()
@@ -537,20 +572,66 @@ Focus on accuracy, specificity, and actionable insights. Use clear, professional
                     cleaned = cleaned.replace('**', '')
                     cleaned = cleaned.replace('*', '')
                 cleaned = cleaned.replace('`', '')
+                # Remove any remaining analysis process mentions
+                cleaned = re.sub(r'\d+\s+Why\s+Analysis[:\-]?\s*', '', cleaned, flags=re.IGNORECASE)
                 cleaned_current_status = cleaned
 
         # Clean each list item using FormatterAgent
         cleaned_possible_causes = []
+        import re
         for cause in possible_causes[:5]:
+            # Remove analysis process content
+            cause = re.sub(r'Why\s+did\s+(this|that|it)\s+happen\?[:\-]?\s*', '', cause, flags=re.IGNORECASE)
+            cause = re.sub(r'Why\s+did\s+(this|that|it)\s+occur\?[:\-]?\s*', '', cause, flags=re.IGNORECASE)
+            cause = re.sub(r'Why\s+is\s+this\s+happening\?[:\-]?\s*', '', cause, flags=re.IGNORECASE)
+            cause = re.sub(r'\d+\s+Why\s+Analysis[:\-]?\s*', '', cause, flags=re.IGNORECASE)
+            # Remove question-answer format, keep only the answer
+            cause = re.sub(r'^Why\s+.*?\?\s*[-:]?\s*', '', cause, flags=re.IGNORECASE | re.MULTILINE)
+            
             cleaned = await self.formatter.format_text(cause)
             if cleaned and len(cleaned.strip()) > 3:
-                cleaned_possible_causes.append(cleaned.strip())
+                cleaned = cleaned.strip()
+                # Remove any remaining analysis process mentions
+                cleaned = re.sub(r'Why\s+did.*?\?\s*', '', cleaned, flags=re.IGNORECASE)
+                cleaned = re.sub(r'\d+\s+Why\s+Analysis[:\-]?\s*', '', cleaned, flags=re.IGNORECASE)
+                if cleaned and len(cleaned) > 10:  # Ensure it's a complete statement
+                    cleaned_possible_causes.append(cleaned)
         
         cleaned_recommended_actions = []
         for action in recommended_actions[:5]:
+            # Remove analysis process content
+            action = re.sub(r'\d+\s+Why\s+Analysis[:\-]?\s*', '', action, flags=re.IGNORECASE)
+            # Remove explanation lines that start with "-" and contain analysis
+            lines = action.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                line_stripped = line.strip()
+                # Skip lines that are analysis explanations
+                if re.search(r'(Why\s+Analysis|ensures|helps|will provide)', line_stripped, re.IGNORECASE) and line_stripped.startswith('-'):
+                    continue
+                cleaned_lines.append(line)
+            action = '\n'.join(cleaned_lines)
+            
             cleaned = await self.formatter.format_text(action)
             if cleaned and len(cleaned.strip()) > 3:
-                cleaned_recommended_actions.append(cleaned.strip())
+                cleaned = cleaned.strip()
+                # Remove any remaining analysis process mentions
+                cleaned = re.sub(r'\d+\s+Why\s+Analysis[:\-]?\s*', '', cleaned, flags=re.IGNORECASE)
+                # Remove explanation sentences that are analysis process
+                sentences = re.split(r'[\.!?]\s+', cleaned)
+                action_sentences = []
+                for sentence in sentences:
+                    sentence = sentence.strip()
+                    if sentence and not re.search(r'(ensures|helps|will provide|because|due to)', sentence.lower()):
+                        action_sentences.append(sentence)
+                    elif sentence and len(sentence.split()) > 5:  # Keep longer sentences that might be actual actions
+                        action_sentences.append(sentence)
+                if action_sentences:
+                    cleaned = '. '.join(action_sentences).strip()
+                    if cleaned and len(cleaned) > 10:
+                        cleaned_recommended_actions.append(cleaned)
+                elif cleaned and len(cleaned) > 10:
+                    cleaned_recommended_actions.append(cleaned)
         
         cleaned_references = []
         for ref in references:
@@ -574,41 +655,137 @@ Focus on accuracy, specificity, and actionable insights. Use clear, professional
 
 
     def _extract_risk_level(self, text: str) -> RiskLevel:
-        """Extract risk level from text"""
+        """
+        Extract risk level from text
+        Prioritizes "Risk Level" section over "Risk Assessment" section to ensure consistency
+        """
+        import re
+        
+        # First, try to extract from "Risk Level" section (standard section)
+        risk_level_section = self._extract_section(text, ["Risk Level", "Risk"])
+        if risk_level_section:
+            risk_level_text = risk_level_section.lower()
+            # Check for explicit risk level mentions in this section
+            if "high" in risk_level_text and "risk" in risk_level_text:
+                return RiskLevel.HIGH
+            elif "medium" in risk_level_text and "risk" in risk_level_text:
+                return RiskLevel.MEDIUM
+            elif "low" in risk_level_text and "risk" in risk_level_text:
+                return RiskLevel.LOW
+            # Also check for standalone risk level words
+            if re.search(r'\b(high|medium|low)\b', risk_level_text):
+                if "high" in risk_level_text:
+                    return RiskLevel.HIGH
+                elif "medium" in risk_level_text:
+                    return RiskLevel.MEDIUM
+                elif "low" in risk_level_text:
+                    return RiskLevel.LOW
+        
+        # If not found in "Risk Level" section, try "Risk Assessment" section
+        risk_assessment_section = self._extract_section(text, ["Risk Assessment"])
+        if risk_assessment_section:
+            assessment_text = risk_assessment_section.lower()
+            if "high" in assessment_text and "risk" in assessment_text:
+                return RiskLevel.HIGH
+            elif "medium" in assessment_text and "risk" in assessment_text:
+                return RiskLevel.MEDIUM
+            elif "low" in assessment_text and "risk" in assessment_text:
+                return RiskLevel.LOW
+            # Check for standalone risk level words
+            if re.search(r'\b(high|medium|low)\b', assessment_text):
+                if "high" in assessment_text:
+                    return RiskLevel.HIGH
+                elif "medium" in assessment_text:
+                    return RiskLevel.MEDIUM
+                elif "low" in assessment_text:
+                    return RiskLevel.LOW
+        
+        # Fallback: search entire text but prioritize "Risk Level" context
         text_lower = text.lower()
-        if "high" in text_lower and "risk" in text_lower:
+        
+        # Look for "Risk Level:" or "Risk Level" followed by High/Medium/Low
+        risk_level_patterns = [
+            r'(?i)risk\s+level[:\-]?\s*(high|medium|low)',
+            r'(?i)risk\s+level[:\-]?\s*is\s*(high|medium|low)',
+        ]
+        for pattern in risk_level_patterns:
+            match = re.search(pattern, text)
+            if match:
+                level = match.group(1).lower()
+                if level == "high":
+                    return RiskLevel.HIGH
+                elif level == "medium":
+                    return RiskLevel.MEDIUM
+                elif level == "low":
+                    return RiskLevel.LOW
+        
+        # Last resort: check for risk keywords in context
+        if any(word in text_lower for word in ["critical", "urgent", "severe", "danger"]) and "risk" in text_lower:
             return RiskLevel.HIGH
-        elif "medium" in text_lower and "risk" in text_lower:
+        elif any(word in text_lower for word in ["warning", "caution", "moderate"]) and "risk" in text_lower:
             return RiskLevel.MEDIUM
         elif "low" in text_lower and "risk" in text_lower:
             return RiskLevel.LOW
-        # Default based on severity keywords
-        if any(word in text_lower for word in ["critical", "urgent", "severe", "danger"]):
-            return RiskLevel.HIGH
-        elif any(word in text_lower for word in ["warning", "caution", "moderate"]):
-            return RiskLevel.MEDIUM
-        else:
-            return RiskLevel.LOW
+        
+        # Default to LOW if no clear indication
+        return RiskLevel.LOW
 
     def _extract_section(self, text: str, section_names: List[str]) -> Optional[str]:
-        """Extract section content from text"""
+        """Extract section content from text
+        
+        Extracts content until the next major section (## header) or end of text.
+        For list sections like "Recommended Actions", extracts all content including
+        paragraph-style items without list markers.
+        """
         import re
 
+        # List of known section headers that should terminate extraction
+        known_sections = [
+            "Current Status", "Status", "Site Status",
+            "Risk Level", "Risk Assessment",
+            "Root Causes", "Root Cause", "Possible Causes", "Causes",
+            "Recommended Actions", "Actions", "Recommendations", "Recommended Steps",
+            "References", "Reference", "SOP Reference",
+            "Final Self-Validation", "Self-Validation"
+        ]
+
         for section_name in section_names:
-            patterns = [
-                rf"(?i){re.escape(section_name)}[:\-]?\s*\n(.*?)(?=\n\*\*|\n##|\n-|\Z)",
-                rf"(?i){re.escape(section_name)}[:\-]?\s*(.*?)(?=\n\*\*|\n##|\n-|\Z)",
-            ]
+            # Pattern 1: Section name followed by newline, then content until next section
+            # Look for next ## header or end of text
+            pattern1 = rf"(?i){re.escape(section_name)}[:\-]?\s*\n(.*?)(?=\n##\s+[A-Z]|\Z)"
+            
+            # Pattern 2: Section name followed by content on same line or next line
+            pattern2 = rf"(?i){re.escape(section_name)}[:\-]?\s*(.*?)(?=\n##\s+[A-Z]|\Z)"
+            
+            patterns = [pattern1, pattern2]
+            
             for pattern in patterns:
                 match = re.search(pattern, text, re.DOTALL | re.MULTILINE)
                 if match:
                     content = match.group(1).strip()
                     if content:
-                        return content
+                        # Additional cleanup: remove any trailing section markers that might have been captured
+                        # Remove lines that look like new section headers
+                        lines = content.split('\n')
+                        cleaned_lines = []
+                        for line in lines:
+                            line_stripped = line.strip()
+                            # Stop if we hit a known section header
+                            if any(line_stripped.startswith(f"## {sec}") or line_stripped.startswith(f"**{sec}") 
+                                   for sec in known_sections if sec != section_name):
+                                break
+                            cleaned_lines.append(line)
+                        
+                        cleaned_content = '\n'.join(cleaned_lines).strip()
+                        if cleaned_content:
+                            return cleaned_content
         return None
 
     def _extract_list_section(self, text: str, section_names: List[str]) -> List[str]:
         """Extract list items from section
+        
+        Handles both single-line and multi-line list items (e.g., questions with answers).
+        Merges continuation lines that don't start with list markers.
         
         Note: Formatting cleanup is handled by FormatterAgent, so we only do basic extraction here.
         """
@@ -619,40 +796,177 @@ Focus on accuracy, specificity, and actionable insights. Use clear, professional
         items = []
         import re
 
-        # Try to extract numbered or bulleted items
-        patterns = [
+        # Patterns to identify list item starts
+        list_item_patterns = [
             r"(?i)^\s*[0-9]+[\.\)]\s*(.+)$",  # Numbered: 1. item
             r"(?i)^\s*[-*•]\s*(.+)$",  # Bulleted: - item
         ]
+        
+        # Pattern to detect if a line is a continuation (indented or not starting with list marker)
+        continuation_pattern = r"^\s{2,}"  # Lines starting with 2+ spaces are likely continuations
 
-        for line in section_text.split("\n"):
-            line = line.strip()
-            if not line:
+        lines = section_text.split("\n")
+        current_item = None
+        
+        # Helper function to detect if a line is likely a new action item (not a continuation)
+        def is_likely_new_action(line: str) -> bool:
+            """Detect if a line is likely a new action item rather than a continuation"""
+            if not line or len(line.strip()) < 15:
+                return False
+            
+            line_stripped = line.strip()
+            line_lower = line_stripped.lower()
+            
+            # Check for action verb starts (common patterns for new actions)
+            action_starts = [
+                'this involves', 'this requires', 'this includes', 'this means',
+                'monitor', 'check', 'review', 'verify', 'ensure', 'implement',
+                'set up', 'establish', 'develop', 'conduct', 'document',
+                'regular', 'perform', 'analyze', 'investigate', 'inspect',
+                'adjust', 'configure', 'update', 'maintain', 'schedule',
+                'these', 'additionally', 'furthermore', 'also', 'next',
+            ]
+            
+            for start in action_starts:
+                if line_lower.startswith(start):
+                    return True
+            
+            # Check if it's a complete sentence starting with capital letter
+            # This catches paragraph-style actions like "Perform a detailed inspection..."
+            if line_stripped[0].isupper() and len(line_stripped.split()) >= 5:
+                # If it starts with a capital letter and has enough words, it's likely a new action
+                # Especially if it starts with an action verb
+                action_verbs = ['perform', 'adjust', 'review', 'monitor', 'check', 'verify',
+                              'ensure', 'implement', 'establish', 'develop', 'conduct',
+                              'document', 'analyze', 'investigate', 'inspect', 'configure',
+                              'update', 'maintain', 'schedule', 'set']
+                first_word = line_lower.split()[0] if line_lower.split() else ""
+                if any(first_word.startswith(verb) for verb in action_verbs):
+                    return True
+                # Also check if previous line ended (empty line or period)
+                return True
+            
+            return False
+        
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            if not line_stripped:
+                # Empty line - if we have a current item, finalize it
+                # This is important for paragraph-style items separated by blank lines
+                if current_item:
+                    items.append(current_item)
+                    current_item = None
                 continue
             
             # Skip headers
-            if line.startswith('#'):
+            if line_stripped.startswith('#'):
+                if current_item:
+                    items.append(current_item)
+                    current_item = None
                 continue
             
-            # Skip section labels (basic check - FormatterAgent will handle detailed cleanup)
-            line_lower = line.lower()
+            # Skip section labels
+            line_lower = line_stripped.lower()
             if (line_lower.startswith('immediate action') or
                 line_lower.startswith('short-term action') or
                 line_lower.startswith('long-term action') or
                 line_lower.startswith('action item')):
+                if current_item:
+                    items.append(current_item)
+                    current_item = None
                 continue
             
-            for pattern in patterns:
-                match = re.match(pattern, line)
+            # Check if this line starts a new list item
+            is_list_item = False
+            item_content = None
+            
+            for pattern in list_item_patterns:
+                match = re.match(pattern, line_stripped)
                 if match:
-                    item = match.group(1).strip()
-                    # Basic cleanup - just remove leading/trailing whitespace
-                    item = item.strip()
-                    if item and len(item) > 3:
-                        items.append(item)
+                    item_content = match.group(1).strip()
+                    is_list_item = True
                     break
-
-        return items
+            
+            if is_list_item:
+                # If we have a previous item, save it
+                if current_item:
+                    items.append(current_item)
+                
+                # Start new item
+                current_item = item_content if item_content and len(item_content) > 3 else None
+            else:
+                # This is a continuation line or a new paragraph-style item
+                if current_item:
+                    # Check if it's likely a continuation (indented) vs a new item
+                    is_indented = re.match(continuation_pattern, line)
+                    is_new_action = is_likely_new_action(line_stripped)
+                    
+                    # Check if previous line ended with period (likely end of previous action)
+                    prev_line_ended = False
+                    if i > 0:
+                        prev_line = lines[i-1].strip()
+                        if prev_line and prev_line.endswith(('.', ':', ';')):
+                            prev_line_ended = True
+                    
+                    # Check if current line starts with a strong action verb (high confidence new action)
+                    strong_action_verbs = ['perform', 'adjust', 'implement', 'establish', 'develop',
+                                         'conduct', 'execute', 'initiate', 'activate', 'configure']
+                    starts_with_strong_verb = any(line_stripped.lower().startswith(verb + ' ') 
+                                                  for verb in strong_action_verbs)
+                    
+                    if is_indented and not is_new_action and not starts_with_strong_verb:
+                        # Merge continuation into current item (indented and not a new action)
+                        current_item += " " + line_stripped
+                    elif is_new_action or starts_with_strong_verb or (prev_line_ended and len(line_stripped) > 20 and line_stripped[0].isupper()):
+                        # This looks like a new action item
+                        # Finalize current item and start new one
+                        items.append(current_item)
+                        current_item = line_stripped
+                    elif line_stripped.startswith(('##', '**', '###')):
+                        # Looks like a new section, finalize current item
+                        items.append(current_item)
+                        current_item = None
+                    else:
+                        # Default: merge as continuation (conservative approach)
+                        current_item += " " + line_stripped
+                elif line_stripped and len(line_stripped) > 10:
+                    # No current item but this line has content - might be a list item without marker
+                    # (some LLMs generate plain text items)
+                    if is_likely_new_action(line_stripped):
+                        current_item = line_stripped
+                    elif line_stripped[0].isupper() and len(line_stripped.split()) >= 5:
+                        # Complete sentence starting with capital - likely an action
+                        # Check if it starts with an action verb
+                        first_word_lower = line_stripped.split()[0].lower() if line_stripped.split() else ""
+                        action_verbs = ['perform', 'adjust', 'review', 'monitor', 'check', 'verify',
+                                      'ensure', 'implement', 'establish', 'develop', 'conduct',
+                                      'document', 'analyze', 'investigate', 'inspect', 'configure',
+                                      'update', 'maintain', 'schedule', 'set', 'create', 'execute']
+                        if any(first_word_lower.startswith(verb) for verb in action_verbs):
+                            current_item = line_stripped
+                        else:
+                            # Might still be an action if it's a complete sentence
+                            current_item = line_stripped
+                    else:
+                        # Might be a continuation from previous section, skip it
+                        pass
+        
+        # Don't forget the last item
+        if current_item:
+            items.append(current_item)
+        
+        # Filter out items that are too short or incomplete
+        filtered_items = []
+        for item in items:
+            item = item.strip()
+            # Filter out items that are just questions without answers, or too short
+            if item and len(item) > 10:  # Increased minimum length to ensure completeness
+                # Check if it's just a question mark (likely incomplete)
+                if item.endswith('?') and len(item.split()) < 5:
+                    continue
+                filtered_items.append(item)
+        
+        return filtered_items
 
     def _create_fallback_report(
         self, site_id: str, all_results: Dict[str, Dict[str, Any]]

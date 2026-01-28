@@ -235,24 +235,18 @@ def register_site_rules_routes(app):
                     },
                 )
             
-            # Clear cache in SiteManager
-            if site_id in site_manager._site_rules_cache:
-                del site_manager._site_rules_cache[site_id]
-                logger.debug(f"Cleared rule cache for site {site_id} in SiteManager")
+            # Clear all caches to ensure fresh rules are loaded from database
+            site_manager.clear_site_rules_cache(site_id)
+            logger.debug(f"Cleared site_manager cache for site {site_id}")
             
-            # Reload rules in rule engine if multi-site is enabled
             app_state = get_app_state()
             rule_engine = app_state.get("rule_engine")
             if rule_engine and hasattr(rule_engine, "site_rule_manager"):
                 rule_engine.site_rule_manager.reload_site_rules(site_id)
-                logger.debug(f"Reloaded rules for site {site_id} in RuleEngine")
-            
-            # Invalidate alarm cache to ensure fresh data
+                logger.info(f"✓ Reloaded rules for site {site_id} in RuleEngine (all caches cleared, rules will be reloaded from database on next evaluation)")
             if query_cache:
                 query_cache.invalidate("alarms")
                 query_cache.invalidate("alarm_stats")
-            
-            # Send WebSocket event to notify frontend to refresh alarm list
             websocket_manager = app_state.get("websocket_manager")
             if websocket_manager:
                 rule_id = rule_data.get('id')
@@ -349,18 +343,16 @@ def register_site_rules_routes(app):
                     },
                 )
             
-            # Clear ALL caches to ensure updated rule is loaded
-            # 1. Clear SiteManager cache
-            if site_id in site_manager._site_rules_cache:
-                del site_manager._site_rules_cache[site_id]
-                logger.info(f"✓ Cleared SiteManager rule cache for site {site_id}")
+            # Clear all caches to ensure fresh rules are loaded from database
+            # Order matters: clear site_manager cache first, then rule_engine cache
+            site_manager.clear_site_rules_cache(site_id)
+            logger.debug(f"Cleared site_manager cache for site {site_id}")
             
-            # 2. Reload rules in rule engine if multi-site is enabled
             app_state = get_app_state()
             rule_engine = app_state.get("rule_engine")
             if rule_engine and hasattr(rule_engine, "site_rule_manager"):
                 rule_engine.site_rule_manager.reload_site_rules(site_id)
-                logger.info(f"✓ Reloaded rules for site {site_id} in RuleEngine (cache cleared)")
+                logger.info(f"✓ Reloaded rules for site {site_id} in RuleEngine (all caches cleared, rules will be reloaded from database on next evaluation)")
             
             # 3. Log rule update details for debugging
             condition = rule_data.get("condition", {})
@@ -447,24 +439,18 @@ def register_site_rules_routes(app):
                     },
                 )
             
-            # Clear cache in SiteManager
-            if site_id in site_manager._site_rules_cache:
-                del site_manager._site_rules_cache[site_id]
-                logger.debug(f"Cleared rule cache for site {site_id} in SiteManager")
+            # Clear all caches to ensure fresh rules are loaded from database
+            site_manager.clear_site_rules_cache(site_id)
+            logger.debug(f"Cleared site_manager cache for site {site_id}")
             
-            # Reload rules in rule engine if multi-site is enabled
             app_state = get_app_state()
             rule_engine = app_state.get("rule_engine")
             if rule_engine and hasattr(rule_engine, "site_rule_manager"):
                 rule_engine.site_rule_manager.reload_site_rules(site_id)
-                logger.debug(f"Reloaded rules for site {site_id} in RuleEngine")
-            
-            # Invalidate alarm cache to ensure fresh data
+                logger.info(f"✓ Reloaded rules for site {site_id} in RuleEngine (all caches cleared, rules will be reloaded from database on next evaluation)")
             if query_cache:
                 query_cache.invalidate("alarms")
                 query_cache.invalidate("alarm_stats")
-            
-            # Send WebSocket event to notify frontend to refresh alarm list
             websocket_manager = app_state.get("websocket_manager")
             if websocket_manager:
                 await websocket_manager.broadcast(

@@ -54,6 +54,8 @@ export const calculateScales = (
     };
   }
 
+  const updatedState: ScaleState = { ...state };
+
   // In real-time mode, use fixed-width sliding time window for smooth panning
   let minTime: number;
   let maxTime: number;
@@ -119,7 +121,7 @@ export const calculateScales = (
   if (values.length === 0) {
     return {
       scales: null,
-      updatedState: state,
+      updatedState,
     };
   }
 
@@ -145,7 +147,6 @@ export const calculateScales = (
   // Apply smooth transitions based on mode
   let finalMin = idealMin;
   let finalMax = idealMax;
-  const updatedState = { ...state };
 
   if (realTime) {
     // Real-time mode: use stable Y-axis range to prevent jumping

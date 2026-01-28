@@ -1,11 +1,15 @@
 /**
  * Weather API
  * API functions for weather information
- * Uses OpenWeatherMap API (free tier available)
+ * Uses OpenWeatherMap API (free tier available).
+ * Fallback wttr.in is CORS-blocked in browser; use VITE_OPENWEATHER_API_KEY or a backend proxy.
  */
 
 import { apiRequest } from './client';
 import { ApiResponse } from '@/types';
+
+let openWeatherWarned = false;
+let fallbackCorsWarned = false;
 
 export interface WeatherData {
   temperature: number;
@@ -41,10 +45,16 @@ export const getWeather = async (lat?: number, lng?: number): Promise<ApiRespons
     };
   }
   
+  const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY;
+  if (!apiKey && !openWeatherWarned) {
+    openWeatherWarned = true;
+    console.warn(
+      'OpenWeatherMap API key not configured. Set VITE_OPENWEATHER_API_KEY in .env for weather. ' +
+      'wttr.in fallback is blocked by CORS when called from the browser.'
+    );
+  }
+
   try {
-    // Try to get weather from OpenWeatherMap (requires API key)
-    const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY;
-    
     if (apiKey) {
       console.log('Fetching weather for coordinates:', { lat, lng });
       const response = await fetch(
@@ -70,34 +80,14 @@ export const getWeather = async (lat?: number, lng?: number): Promise<ApiRespons
         const errorData = await response.json().catch(() => ({}));
         console.error('Weather API error:', response.status, errorData);
       }
-    } else {
-      console.warn('OpenWeatherMap API key not configured. Using fallback weather service.');
     }
-    
-    // Fallback: Try using a free weather API (wttr.in) as backup
-    try {
-      const fallbackResponse = await fetch(
-        `https://wttr.in/?format=j1&lat=${lat}&lon=${lng}`
+
+    // Fallback: wttr.in is usually CORS-blocked from browser; skip to avoid repeated errors
+    if (!fallbackCorsWarned) {
+      fallbackCorsWarned = true;
+      console.debug(
+        '[Weather] Skipping wttr.in fallback (CORS blocks it from browser). Use VITE_OPENWEATHER_API_KEY or a backend proxy.'
       );
-      
-      if (fallbackResponse.ok) {
-        const data = await fallbackResponse.json();
-        const current = data.current_condition[0];
-        return {
-          status: 'success',
-          data: {
-            temperature: parseInt(current.temp_C),
-            description: current.weatherDesc[0].value,
-            icon: '01d', // wttr.in doesn't provide icon codes, use default
-            humidity: parseInt(current.humidity),
-            windSpeed: parseFloat(current.windspeedKmph) / 3.6, // Convert km/h to m/s
-            city: data.nearest_area[0].areaName[0].value,
-            country: data.nearest_area[0].country[0].value,
-          },
-        };
-      }
-    } catch (fallbackError) {
-      console.error('Fallback weather API failed:', fallbackError);
     }
     
     // Last resort: Return error

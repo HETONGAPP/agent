@@ -129,6 +129,25 @@ async def lifespan(app: FastAPI):
                 pool_max_connections=pool_max_connections,
             )
             logger.info(f"✓ InfluxDB client connected: {influx_url} (org: {influx_org}, bucket: {influx_bucket})")
+            # Ensure default bucket exists (avoids "bucket 'alarms' not found" when querying without site_id)
+            try:
+                buckets_api = influx_client.client.buckets_api()
+                buckets = buckets_api.find_buckets()
+                bucket_list = buckets.buckets if hasattr(buckets, "buckets") else (buckets if isinstance(buckets, list) else list(buckets))
+                if not any(b.name == influx_bucket for b in bucket_list):
+                    from influxdb_client.domain.bucket import Bucket
+                    from influxdb_client.domain.bucket_retention_rules import BucketRetentionRules
+                    orgs_api = influx_client.client.organizations_api()
+                    orgs = orgs_api.find_organizations()
+                    org_list = orgs.orgs if hasattr(orgs, "orgs") else (orgs if isinstance(orgs, list) else list(orgs))
+                    org_id = next((o.id for o in org_list if o.name == influx_org), influx_org)
+                    from ..storage.optimization_config import OptimizationConfig
+                    retention_seconds = OptimizationConfig.RAW_DATA_RETENTION_DAYS * 86400
+                    retention_rules = BucketRetentionRules(type="expire", every_seconds=retention_seconds)
+                    buckets_api.create_bucket(bucket=Bucket(name=influx_bucket, org_id=org_id, retention_rules=[retention_rules]))
+                    logger.info(f"✓ Created default bucket: {influx_bucket}")
+            except Exception as bucket_err:
+                logger.warning(f"Could not ensure default bucket {influx_bucket} exists: {bucket_err}")
         else:
             logger.warning(
                 "⚠ InfluxDB token not configured (INFLUXDB_TOKEN is empty). "
@@ -405,7 +424,7 @@ async def lifespan(app: FastAPI):
         set_app_state(agent_service=agent_service)
         
         if agent_service and agent_service.container_manager:
-            site_manager._container_manager = agent_service.container_manager
+            site_manager.set_container_manager(agent_service.container_manager)
             logger.info("✓ Site manager connected to container manager")
         
         logger.info("ℹ Data collection is now manual via API endpoints")

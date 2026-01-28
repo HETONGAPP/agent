@@ -103,8 +103,10 @@ export const useSiteStore = create<SiteState>((set, get) => ({
             lastRateLimitTime.delete(requestKey);
             set({ sites: sitesList, loading: false, error: null });
           } else {
-            console.warn('[SiteStore] ⚠️ No sites in response or empty array');
-            // Clear rate limit cooldown on success (even if empty)
+            // Empty list is valid (no sites yet); use debug to avoid console noise
+            if (import.meta.env.DEV) {
+              console.debug('[SiteStore] Sites list empty (no sites in backend or not yet created)');
+            }
             lastRateLimitTime.delete(requestKey);
             set({ sites: [], loading: false, error: null });
           }

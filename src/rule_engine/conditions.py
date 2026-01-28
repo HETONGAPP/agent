@@ -99,9 +99,10 @@ class ConditionEvaluator:
             logger.warning(f"[ConditionEvaluator] Unknown operator: {operator}")
             return False
         
-        logger.debug(
+        logger.info(
             f"[ConditionEvaluator] Threshold evaluation: {field_path} {operator} {threshold_value} "
-            f"-> {field_value} {operator} {threshold_value} = {result}"
+            f"-> {field_value} {operator} {threshold_value} = {result} "
+            f"(device_id={device_data.device_id}, site_id={device_data.site_id})"
         )
         
         return result

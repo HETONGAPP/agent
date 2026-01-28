@@ -482,6 +482,7 @@ class PostgreSQLMetadataStorage:
         """
         try:
             with self._get_session() as session:
+                # Use fresh query (no caching) to ensure we get latest rules after updates
                 query = session.query(self.RuleModel).filter_by(site_id=site_id)
                 if enabled_only:
                     query = query.filter_by(enabled=True)

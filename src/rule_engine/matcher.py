@@ -52,9 +52,9 @@ class RuleMatcher:
                         "device_data": device_data,
                         "matched_at": datetime.now(UTC),
                     })
-                    logger.debug(
-                        f"[RuleMatcher] Rule {rule_id} matched for device {device_data.device_id} "
-                        f"(type: {device_data.device_type.value}, site: {device_data.site_id})"
+                    logger.info(
+                        f"[RuleMatcher] ✓ Rule {rule_id} matched for device {device_data.device_id} "
+                        f"(type: {device_data.device_type.value}, site: {device_data.site_id}, rule_name={rule.get('name')})"
                     )
                 else:
                     # Log why rule didn't match (condition evaluation failed)
@@ -62,9 +62,10 @@ class RuleMatcher:
                     field_path = condition.get("field")
                     if field_path:
                         field_value = device_data.get_field(field_path)
-                        logger.debug(
+                        logger.info(
                             f"[RuleMatcher] Rule {rule_id} condition not met: "
-                            f"{field_path}={field_value}, condition: {condition}"
+                            f"{field_path}={field_value}, condition: {condition.get('operator')} {condition.get('value')} "
+                            f"(device_id={device_data.device_id}, site_id={device_data.site_id})"
                         )
             else:
                 # Log why rule is not applicable
@@ -141,6 +142,10 @@ class RuleMatcher:
 
         # Check device ID filter
         if rule_device_ids and device_data.device_id not in rule_device_ids:
+            logger.debug(
+                f"[RuleMatcher] Rule {rule.get('id')} not applicable: device_id={device_data.device_id} "
+                f"not in rule's device_ids={rule_device_ids}"
+            )
             return False
 
         # Check source filter

@@ -101,6 +101,20 @@
     @apply bg-gray-500;
   }
   
+  /* Chart fade-in for smooth scale-ready transition */
+  @keyframes chartFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .chart-fade-in {
+    animation: chartFadeIn 0.28s ease-out forwards;
+  }
+
   /* Animation utilities */
   .animate-fade-in {
     animation: fadeIn 0.3s ease-in;

@@ -42,122 +42,162 @@ def register_diagnostic_routes(app):
         limit: int = 100,
         offset: int = 0,
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
+        postgres_storage = Depends(get_postgres_metadata_storage),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
-        """List diagnostic reports with optional filters and pagination"""
-        if not influx_client:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "error",
-                    "message": "InfluxDB client not initialized",
-                },
-            )
-        
+        """List diagnostic reports with optional filters and pagination
+        Queries both PostgreSQL (metadata) and InfluxDB (full reports) and merges results
+        """
         try:
-            # Use site container if available
-            agent_service = get_agent_service()
-            if agent_service and agent_service.container_manager:
-                if site_id:
-                    # Query specific site container
-                    container = agent_service.container_manager.get_container(site_id, auto_create=False)
-                    if container:
-                        # Query from site container (no need for site_id filter)
-                        # Set deduplicate=False to show all diagnostics, not just the latest one per (device_id, alarm_type)
-                        diagnostics = container.query_diagnostics(
-                            start_time=start_time,
-                            end_time=end_time,
-                            alarm_id=alarm_id,
-                            risk_level=risk_level,
-                            device_type=device_type,
-                            limit=limit + offset,
-                            deduplicate=False,  # Show all diagnostics, not just latest
-                        )
-                        total_count = len(container.query_diagnostics(
-                            start_time=start_time,
-                            end_time=end_time,
-                            alarm_id=alarm_id,
-                            risk_level=risk_level,
-                            device_type=device_type,
-                            limit=10000,
-                            deduplicate=False,  # Show all diagnostics for count
-                        ))
+            pg_diagnostics_list = []
+            
+            # First, query PostgreSQL for diagnostic metadata
+            if postgres_storage:
+                try:
+                    pg_diagnostics = postgres_storage.get_all_diagnostics(
+                        site_id=site_id,
+                        risk_level=risk_level,
+                        limit=None,  # Get all matching records for merging
+                        offset=None,
+                    )
+                    
+                    # Filter by alarm_id if provided
+                    if alarm_id:
+                        pg_diagnostics = [d for d in pg_diagnostics if d.get("alarm_id") == alarm_id]
+                    
+                    # Convert PostgreSQL format to match InfluxDB format
+                    for pg_diag in pg_diagnostics:
+                        # Create diagnostic dict in InfluxDB format
+                        diagnostic_dict = {
+                            "alarm_id": pg_diag.get("alarm_id"),
+                            "site_id": pg_diag.get("site_id"),
+                            "device_id": pg_diag.get("device_id"),
+                            "device_type": pg_diag.get("device_type"),
+                            "alarm_type": pg_diag.get("alarm_type"),
+                            "risk_level": pg_diag.get("risk_level"),
+                            "current_status": pg_diag.get("current_status"),
+                            "timestamp": pg_diag.get("generated_at") or pg_diag.get("created_at"),
+                            "generated_at": pg_diag.get("generated_at"),
+                            "metadata": pg_diag.get("metadata", {}),
+                        }
+                        pg_diagnostics_list.append(diagnostic_dict)
+                    
+                    logger.info(f"Loaded {len(pg_diagnostics_list)} diagnostics from PostgreSQL")
+                except Exception as e:
+                    logger.warning(f"Failed to query diagnostics from PostgreSQL: {e}")
+            
+            # Then query InfluxDB for full diagnostic reports
+            influx_diagnostics = []
+            if influx_client:
+                # Use site container if available
+                agent_service = get_agent_service()
+                if agent_service and agent_service.container_manager:
+                    if site_id:
+                        # Query specific site container
+                        container = agent_service.container_manager.get_container(site_id, auto_create=False)
+                        if container:
+                            # Query from site container (no need for site_id filter)
+                            # Set deduplicate=False to show all diagnostics, not just the latest one per (device_id, alarm_type)
+                            influx_diagnostics = container.query_diagnostics(
+                                start_time=start_time,
+                                end_time=end_time,
+                                alarm_id=alarm_id,
+                                risk_level=risk_level,
+                                device_type=device_type,
+                                limit=10000,
+                                deduplicate=False,  # Show all diagnostics, not just latest
+                            )
+                        # If container doesn't exist, influx_diagnostics remains empty
                     else:
-                        # Container doesn't exist, return empty
-                        diagnostics = []
-                        total_count = 0
-                else:
-                    # No site_id provided, query all containers and merge results (parallel optimization)
-                    all_containers = agent_service.container_manager.list_containers()
-                    all_diagnostics = []
-                    
-                    # Parallel query optimization (query_diagnostics is sync, so we use ThreadPoolExecutor)
-                    import concurrent.futures
-                    
-                    def query_container_diagnostics(container_site_id: str):
-                        try:
-                            container = agent_service.container_manager.get_container(container_site_id, auto_create=False)
-                            if container:
-                                return container.query_diagnostics(
-                                    start_time=start_time,
-                                    end_time=end_time,
-                                    alarm_id=alarm_id,
-                                    risk_level=risk_level,
-                                    device_type=device_type,
-                                    limit=10000,
-                                    deduplicate=False,  # Show all diagnostics, not just latest
-                                )
-                        except Exception as e:
-                            logger.warning(f"Failed to query diagnostics from container {container_site_id}: {e}")
-                        return []
-                    
-                    # Execute queries in parallel using thread pool
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                        futures = {executor.submit(query_container_diagnostics, cid): cid for cid in all_containers}
-                        for future in concurrent.futures.as_completed(futures):
+                        # No site_id provided, query all containers and merge results (parallel optimization)
+                        all_containers = agent_service.container_manager.list_containers()
+                        
+                        # Parallel query optimization (query_diagnostics is sync, so we use ThreadPoolExecutor)
+                        import concurrent.futures
+                        
+                        def query_container_diagnostics(container_site_id: str):
                             try:
-                                result = future.result()
-                                if isinstance(result, list):
-                                    all_diagnostics.extend(result)
+                                container = agent_service.container_manager.get_container(container_site_id, auto_create=False)
+                                if container:
+                                    return container.query_diagnostics(
+                                        start_time=start_time,
+                                        end_time=end_time,
+                                        alarm_id=alarm_id,
+                                        risk_level=risk_level,
+                                        device_type=device_type,
+                                        limit=10000,
+                                        deduplicate=False,  # Show all diagnostics, not just latest
+                                    )
                             except Exception as e:
-                                container_id = futures[future]
-                                logger.warning(f"Failed to query diagnostics from container {container_id}: {e}")
-                    
-                    # Sort by timestamp (descending)
-                    all_diagnostics.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-                    total_count = len(all_diagnostics)
-                    
-                    # Apply offset and limit
-                    diagnostics = all_diagnostics[offset:offset + limit]
-            else:
-                # Fallback to legacy mode (query with site_id filter)
-                all_diagnostics = influx_client.query_diagnostics(
-                    start_time=start_time,
-                    end_time=end_time,
-                    alarm_id=alarm_id,
-                    risk_level=risk_level,
-                    site_id=site_id,
-                    device_type=device_type,
-                    limit=10000,
-                )
-                total_count = len(all_diagnostics)
-                
-                diagnostics = influx_client.query_diagnostics(
-                    start_time=start_time,
-                    end_time=end_time,
-                    alarm_id=alarm_id,
-                    risk_level=risk_level,
-                    site_id=site_id,
-                    device_type=device_type,
-                    limit=limit + offset,
-                )
+                                logger.warning(f"Failed to query diagnostics from container {container_site_id}: {e}")
+                            return []
+                        
+                        # Execute queries in parallel using thread pool
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                            futures = {executor.submit(query_container_diagnostics, cid): cid for cid in all_containers}
+                            for future in concurrent.futures.as_completed(futures):
+                                try:
+                                    result = future.result()
+                                    if isinstance(result, list):
+                                        influx_diagnostics.extend(result)
+                                except Exception as e:
+                                    container_id = futures[future]
+                                    logger.warning(f"Failed to query diagnostics from container {container_id}: {e}")
+                else:
+                    # Fallback to legacy mode (query with site_id filter)
+                    influx_diagnostics = influx_client.query_diagnostics(
+                        start_time=start_time,
+                        end_time=end_time,
+                        alarm_id=alarm_id,
+                        risk_level=risk_level,
+                        site_id=site_id,
+                        device_type=device_type,
+                        limit=10000,
+                    )
             
-            # Apply offset
-            if offset > 0:
-                diagnostics = diagnostics[offset:]
+            # Merge PostgreSQL and InfluxDB results
+            # Use alarm_id as unique key to deduplicate
+            diagnostics_map = {}
             
-            # Limit results
-            diagnostics = diagnostics[:limit]
+            # Add InfluxDB diagnostics first (they have full report data)
+            for diag in influx_diagnostics:
+                alarm_id_key = diag.get("alarm_id")
+                if alarm_id_key:
+                    diagnostics_map[alarm_id_key] = diag
+            
+            # Add PostgreSQL diagnostics (they may have metadata not in InfluxDB)
+            for pg_diag in pg_diagnostics_list:
+                alarm_id_key = pg_diag.get("alarm_id")
+                if alarm_id_key:
+                    if alarm_id_key in diagnostics_map:
+                        # Merge: InfluxDB has full report, PostgreSQL has metadata
+                        # Update InfluxDB diagnostic with PostgreSQL metadata if missing
+                        influx_diag = diagnostics_map[alarm_id_key]
+                        if not influx_diag.get("site_id") and pg_diag.get("site_id"):
+                            influx_diag["site_id"] = pg_diag.get("site_id")
+                        if not influx_diag.get("device_id") and pg_diag.get("device_id"):
+                            influx_diag["device_id"] = pg_diag.get("device_id")
+                        if not influx_diag.get("device_type") and pg_diag.get("device_type"):
+                            influx_diag["device_type"] = pg_diag.get("device_type")
+                        if not influx_diag.get("risk_level") and pg_diag.get("risk_level"):
+                            influx_diag["risk_level"] = pg_diag.get("risk_level")
+                        if not influx_diag.get("current_status") and pg_diag.get("current_status"):
+                            influx_diag["current_status"] = pg_diag.get("current_status")
+                    else:
+                        # PostgreSQL has diagnostic but InfluxDB doesn't - add it
+                        diagnostics_map[alarm_id_key] = pg_diag
+                        logger.debug(f"Added diagnostic from PostgreSQL only: {alarm_id_key}")
+            
+            # Convert map back to list and sort by timestamp (descending)
+            all_diagnostics = list(diagnostics_map.values())
+            all_diagnostics.sort(key=lambda x: (
+                x.get("generated_at") or x.get("timestamp") or x.get("created_at") or ""
+            ), reverse=True)
+            
+            total_count = len(all_diagnostics)
+            
+            # Apply offset and limit
+            diagnostics = all_diagnostics[offset:offset + limit]
             
             full_diagnostics = diagnostics
             

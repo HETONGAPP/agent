@@ -5,7 +5,7 @@ Manages site configurations and provides site-related operations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -254,55 +254,106 @@ class SiteManager:
             logger.error(f"Failed to load site rules from file for {site_id}: {e}", exc_info=True)
             return []
 
-    def add_site_rule(self, site_id: str, rule: Dict[str, Any]) -> bool:
+    def add_site_rule(self, site_id: str, rule: Dict[str, Any], check_conflicts: bool = True) -> Tuple[bool, Optional[str]]:
         """
         Add a rule to a site's rules file
 
         Args:
             site_id: Site ID
             rule: Rule configuration dictionary
+            check_conflicts: If True, check for conflicts with existing rules
 
         Returns:
-            True if rule was added successfully, False otherwise
+            Tuple of (success: bool, error_message: Optional[str])
+            If success is False, error_message contains the reason
         """
         if not self.site_exists(site_id):
             logger.warning(f"Site {site_id} does not exist")
-            return False
+            return False, f"Site {site_id} does not exist"
 
         try:
             rule_id = rule.get("id")
             if not rule_id:
                 logger.error("Rule ID is required")
-                return False
+                return False, "Rule ID is required"
 
-            # Check if rule already exists in PostgreSQL (primary check)
+            logger.info(f"Adding rule {rule_id} to site {site_id}")
+
+            # Get all existing rules for conflict checking
+            existing_rules = []
+            
+            # Get rules from PostgreSQL (primary source)
             if self._postgres_storage:
                 try:
-                    existing_rule = self._postgres_storage.get_rule(site_id, rule_id)
-                    if existing_rule:
-                        logger.warning(f"Rule with ID {rule_id} already exists for site {site_id} in PostgreSQL")
-                        return False
+                    all_rules = self._postgres_storage.get_rules_by_site(site_id, enabled_only=False)
+                    if all_rules:
+                        existing_rules.extend(all_rules)
+                        logger.debug(f"Loaded {len(all_rules)} rules from PostgreSQL for site {site_id}")
                 except Exception as e:
-                    logger.debug(f"Error checking rule in PostgreSQL: {e}")
+                    logger.warning(f"Error loading rules from PostgreSQL: {e}")
 
-            # Also check in file if site_rules_dir is configured (backward compatibility)
-            existing_rules = []
+            # Also get rules from file if site_rules_dir is configured (backward compatibility)
             if self.site_rules_dir:
                 rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
                 if rules_file.exists():
                     try:
                         with open(rules_file, "r", encoding="utf-8") as f:
                             config = yaml.safe_load(f) or {}
-                            existing_rules = config.get("rules", [])
+                            file_rules = config.get("rules", [])
+                            # Only add rules not already in existing_rules (avoid duplicates)
+                            existing_rule_ids = {r.get("id") for r in existing_rules}
+                            for file_rule in file_rules:
+                                if file_rule.get("id") not in existing_rule_ids:
+                                    existing_rules.append(file_rule)
+                        logger.debug(f"Loaded {len(file_rules)} rules from file for site {site_id}")
                     except Exception as e:
-                        logger.debug(f"Error loading rules from file: {e}")
+                        logger.warning(f"Error loading rules from file: {e}")
 
-            # Check if rule with same ID already exists in file
-            if existing_rules:
-                for existing_rule in existing_rules:
-                    if existing_rule.get("id") == rule_id:
-                        logger.warning(f"Rule with ID {rule_id} already exists for site {site_id} in file")
-                        return False
+            logger.debug(f"Total existing rules for conflict checking: {len(existing_rules)}")
+
+            # Check if rule already exists (by ID) - do this first before conflict checking
+            for existing_rule in existing_rules:
+                if existing_rule.get("id") == rule_id:
+                    logger.warning(f"Rule with ID {rule_id} already exists for site {site_id}")
+                    return False, f"Rule with ID '{rule_id}' already exists. Please use a different ID or update the existing rule."
+
+            # Check if rule already exists (by ID) - do this first before conflict checking
+            for existing_rule in existing_rules:
+                if existing_rule.get("id") == rule_id:
+                    logger.warning(f"Rule with ID {rule_id} already exists for site {site_id}")
+                    return False, f"Rule with ID '{rule_id}' already exists. Please use a different ID or update the existing rule."
+
+            # Check for conflicts if enabled (skip ID duplicate check since we already did it above)
+            if check_conflicts and existing_rules:
+                try:
+                    from ..rule_engine.conflict_detector import RuleConflictDetector
+                    
+                    conflicts = RuleConflictDetector.detect_conflicts(rule, existing_rules, strict_mode=True)
+                    
+                    # Filter out ID duplicate conflicts since we already checked for that
+                    conflicts = [c for c in conflicts if c.get("type") != "id_duplicate"]
+                    
+                    # Check for critical errors (logical contradiction)
+                    error_conflicts = [c for c in conflicts if c.get("severity") == "error"]
+                    if error_conflicts:
+                        error_message = RuleConflictDetector.format_conflicts(error_conflicts)
+                        logger.warning(f"Rule conflicts detected for {rule_id}:\n{error_message}")
+                        return False, error_message
+                    
+                    # Log warnings but allow rule addition
+                    warning_conflicts = [c for c in conflicts if c.get("severity") == "warning"]
+                    if warning_conflicts:
+                        warning_message = RuleConflictDetector.format_conflicts(warning_conflicts)
+                        logger.warning(f"Rule warnings for {rule_id}:\n{warning_message}")
+                        # Store warnings in rule metadata for later reference
+                        if "metadata" not in rule:
+                            rule["metadata"] = {}
+                        rule["metadata"]["_conflict_warnings"] = warning_conflicts
+                except ImportError as e:
+                    logger.warning(f"Failed to import conflict detector: {e}. Skipping conflict check.")
+                except Exception as e:
+                    logger.error(f"Error during conflict detection: {e}", exc_info=True)
+                    # Don't block rule addition if conflict detection fails, but log the error
 
             # Ensure rule has consistent alarm_type in metadata
             if "metadata" not in rule:
@@ -322,10 +373,10 @@ class SiteManager:
                         logger.debug(f"Saved rule {rule_id} to PostgreSQL for site {site_id}")
                     else:
                         logger.error(f"Failed to save rule {rule_id} to PostgreSQL for site {site_id}")
-                        return False
+                        return False, f"Failed to save rule {rule_id} to PostgreSQL"
                 except Exception as e:
                     logger.error(f"Failed to save rule to PostgreSQL for site {site_id}: {e}", exc_info=True)
-                    return False
+                    return False, f"Failed to save rule to PostgreSQL: {str(e)}"
             else:
                 logger.warning("PostgreSQL storage not configured, rule will not be persisted")
 
@@ -367,10 +418,10 @@ class SiteManager:
                     logger.warning(f"Failed to clear rule cache in SiteRuleManager: {e}")
 
             logger.info(f"Added rule {rule_id or 'unnamed'} to site {site_id}")
-            return True
+            return True, None
         except Exception as e:
             logger.error(f"Failed to add rule to site {site_id}: {e}", exc_info=True)
-            return False
+            return False, str(e)
 
     def update_site_rule(self, site_id: str, rule_id: str, rule: Dict[str, Any]) -> bool:
         """

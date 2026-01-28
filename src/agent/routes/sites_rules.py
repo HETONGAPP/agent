@@ -167,7 +167,10 @@ def register_site_rules_routes(app):
             )
         
         try:
+            logger.info(f"Received request to add rule to site {site_id}: rule_id={rule_data.get('id')}")
+            
             if not site_manager.site_exists(site_id):
+                logger.warning(f"Site {site_id} not found")
                 return JSONResponse(
                     status_code=404,
                     content={
@@ -178,6 +181,7 @@ def register_site_rules_routes(app):
             
             # Validate required fields
             if not rule_data.get("id"):
+                logger.warning("Rule ID is missing in request")
                 return JSONResponse(
                     status_code=400,
                     content={
@@ -187,6 +191,7 @@ def register_site_rules_routes(app):
                 )
             
             if not rule_data.get("condition"):
+                logger.warning(f"Rule condition is missing for rule {rule_data.get('id')}")
                 return JSONResponse(
                     status_code=400,
                     content={
@@ -206,14 +211,27 @@ def register_site_rules_routes(app):
                 rule_data["metadata"]["alarm_type"] = alarm_type
                 logger.debug(f"Auto-generated alarm_type '{alarm_type}' from rule name '{rule_name}'")
             
-            # Add rule to site
-            success = site_manager.add_site_rule(site_id, rule_data)
-            if not success:
+            # Add rule to site (with conflict checking)
+            try:
+                success, error_message = site_manager.add_site_rule(site_id, rule_data, check_conflicts=True)
+                if not success:
+                    logger.warning(f"Failed to add rule {rule_data.get('id')} to site {site_id}: {error_message}")
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "status": "error",
+                            "message": error_message or "Failed to add rule. Rule ID may already exist.",
+                            "rule_id": rule_data.get("id"),
+                        },
+                    )
+            except Exception as e:
+                logger.error(f"Exception while adding rule to site {site_id}: {e}", exc_info=True)
                 return JSONResponse(
-                    status_code=400,
+                    status_code=500,
                     content={
                         "status": "error",
-                        "message": "Failed to add rule. Rule ID may already exist.",
+                        "message": f"Internal error while adding rule: {str(e)}",
+                        "rule_id": rule_data.get("id"),
                     },
                 )
             

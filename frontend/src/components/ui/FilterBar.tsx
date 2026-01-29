@@ -15,7 +15,7 @@ interface FilterBarProps {
 
 export const FilterBar = ({ children, onClear, showClear = true, searchComponent }: FilterBarProps) => {
   return (
-    <div className="card mb-4 p-3 sm:p-4 bg-gray-900/40 border border-gray-800/50">
+    <div className="card mb-3 sm:mb-4 p-3 sm:p-4 bg-gray-900/40 border border-gray-800/50" style={{ marginLeft: 0, marginRight: 0 }}>
       <div className="flex flex-col gap-3 sm:gap-4">
         {/* Use flex layout with wrap, but with fixed min-widths to prevent shifting */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-wrap">

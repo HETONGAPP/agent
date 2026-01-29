@@ -3,21 +3,31 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useToastStore } from '@/store/useToastStore';
-import { useSidebarStore } from '@/store/useSidebarStore';
-import { LogOut, User, ChevronDown, Menu } from 'lucide-react';
+import { LogOut, User, ChevronDown, Menu, LayoutDashboard, Map, Plug, Bell, FileText, Workflow } from 'lucide-react';
 import logoIcon from '@/assets/web.svg';
+
+const mobileNavItems = [
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/datacenter', label: 'Data Center', icon: Map },
+  { path: '/devices', label: 'Devices', icon: Plug },
+  { path: '/alarms', label: 'Alarms', icon: Bell },
+  { path: '/diagnostics', label: 'Diagnostics', icon: FileText },
+  { path: '/flow', label: 'Data Flow', icon: Workflow },
+];
 
 export const Navbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout, isLoading } = useAuthStore();
   const { addToast } = useToastStore();
-  const { openMobile } = useSidebarStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -30,21 +40,34 @@ export const Navbar = () => {
           console.log('[Navbar] Clicked on button inside menu, not closing');
           return;
         }
+        // Don't close if clicking on mobile nav items
+        if (mobileNavRef.current?.contains(target)) {
+          return;
+        }
       }
       if (menuRef.current && !menuRef.current.contains(target)) {
         console.log('[Navbar] Clicked outside menu, closing');
         setShowUserMenu(false);
       }
+      if (mobileNavRef.current && !mobileNavRef.current.contains(target)) {
+        setShowMobileNav(false);
+      }
     };
 
-    if (showUserMenu) {
-      // Use click event instead of mousedown to allow button onClick to fire first
+    if (showUserMenu || showMobileNav) {
       document.addEventListener('click', handleClickOutside, true);
       return () => {
         document.removeEventListener('click', handleClickOutside, true);
       };
     }
-  }, [showUserMenu]);
+  }, [showUserMenu, showMobileNav]);
+  
+  // Close mobile nav when route changes
+  useEffect(() => {
+    if (showMobileNav) {
+      setShowMobileNav(false);
+    }
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     console.log('[Navbar] Logout button clicked');
@@ -72,24 +95,111 @@ export const Navbar = () => {
 
   return (
     <motion.nav
-      className="bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 border-b border-gray-700/50 px-4 sm:px-6 py-3 sm:py-4 shadow-lg relative"
-      style={{ willChange: 'transform, opacity', zIndex: 1000 }}
+      className="bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 border-b border-gray-700/50 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 shadow-lg relative z-[100]"
+      style={{ 
+        willChange: 'transform, opacity',
+        position: 'relative'
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Mobile menu button */}
-          <motion.button
-            onClick={openMobile}
-            className="lg:hidden p-2 rounded-lg text-gray-300 hover:bg-gray-700 transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            aria-label="Toggle menu"
-          >
-            <Menu className="w-5 h-5" />
-          </motion.button>
+          {/* Mobile navigation dropdown button */}
+          <div className="lg:hidden relative" ref={mobileNavRef}>
+            <button
+              onClick={() => {
+                console.log('[Navbar] Mobile nav button clicked');
+                setShowMobileNav(!showMobileNav);
+              }}
+              className="p-2.5 rounded-lg text-gray-300 hover:bg-gray-700 active:bg-gray-600 transition-colors relative"
+              style={{ 
+                zIndex: 200, 
+                position: 'relative', 
+                pointerEvents: 'auto',
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation',
+                minWidth: '44px',
+                minHeight: '44px',
+                cursor: 'pointer'
+              }}
+              aria-label="Toggle navigation menu"
+              type="button"
+            >
+              <Menu className="w-5 h-5 pointer-events-none" />
+            </button>
+            
+            {/* Mobile Navigation Dropdown */}
+            <AnimatePresence>
+              {showMobileNav && (
+                <>
+                  {/* Overlay */}
+                  <motion.div
+                    className="fixed inset-0 bg-black/50 z-[90] lg:hidden"
+                    style={{ pointerEvents: 'auto' }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => {
+                      console.log('[Navbar] Mobile nav overlay clicked, closing');
+                      setShowMobileNav(false);
+                    }}
+                  />
+                  
+                  {/* Dropdown Menu */}
+                  <motion.div
+                    className="fixed left-3 top-14 w-[calc(100%-1.5rem)] max-w-xs bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-700/50 py-2 z-[100] lg:hidden"
+                    style={{ 
+                      willChange: 'transform, opacity',
+                      zIndex: 100,
+                      maxHeight: 'calc(100vh - 4rem)',
+                      overflowY: 'auto'
+                    }}
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <nav>
+                      <ul className="space-y-1">
+                        {mobileNavItems.map((item) => {
+                          const isActive = location.pathname === item.path;
+                          return (
+                            <li key={item.path}>
+                              <Link
+                                to={item.path}
+                                onClick={() => {
+                                  console.log('[Navbar] Mobile nav link clicked:', item.path);
+                                  setShowMobileNav(false);
+                                }}
+                                className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-lg transition-all duration-200 ${
+                                  isActive
+                                    ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30'
+                                    : 'text-gray-300 hover:bg-gray-700/50 hover:text-white active:bg-gray-700'
+                                }`}
+                                style={{ 
+                                  WebkitTapHighlightColor: 'transparent',
+                                  touchAction: 'manipulation',
+                                  minHeight: '44px',
+                                  display: 'flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <item.icon size={20} className="flex-shrink-0" />
+                                <span className="font-medium">{item.label}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </nav>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
           
           <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-90 transition-all duration-300 group">
             <motion.img
@@ -134,11 +244,11 @@ export const Navbar = () => {
               <AnimatePresence>
                 {showUserMenu && (
                   <motion.div
-                    className="fixed right-4 mt-2 w-48 sm:w-56 bg-gray-800/95 rounded-xl shadow-2xl border border-gray-700/50 py-2"
+                    className="fixed right-2 sm:right-4 mt-2 w-48 sm:w-56 bg-gray-800/95 rounded-xl shadow-2xl border border-gray-700/50 py-2"
                     style={{ 
                       willChange: 'transform, opacity',
                       zIndex: 99999,
-                      top: '64px' // Adjust based on navbar height
+                      top: '56px' // Adjust based on navbar height (mobile is smaller)
                     }}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}

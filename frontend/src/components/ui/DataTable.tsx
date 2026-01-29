@@ -38,7 +38,7 @@ export function DataTable<T extends Record<string, unknown>>({
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className="card">
+      <div className="card" style={{ margin: 0 }}>
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner size="lg" />
         </div>
@@ -48,7 +48,7 @@ export function DataTable<T extends Record<string, unknown>>({
 
   if (data.length === 0) {
     return (
-      <div className="card">
+      <div className="card" style={{ margin: 0 }}>
         <EmptyState
           icon="📭"
           title="No Data"
@@ -59,9 +59,9 @@ export function DataTable<T extends Record<string, unknown>>({
   }
 
   return (
-    <div className="card overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin">
-      <div className="min-w-full">
-        <table className="w-full table-auto sm:table-fixed">
+    <div className="w-full overflow-x-auto scrollbar-thin" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="card min-w-full" style={{ margin: 0 }}>
+        <table className="w-full table-auto sm:table-fixed" style={{ minWidth: '600px' }}>
           <colgroup>
             {columns.map((column) => (
               <col key={column.key} style={{ width: column.width || 'auto' }} />
@@ -72,7 +72,7 @@ export function DataTable<T extends Record<string, unknown>>({
               {columns.map((column) => (
                 <th
                   key={column.key}
-                  className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-300 whitespace-nowrap"
+                  className="px-2 sm:px-3 lg:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-300 whitespace-nowrap"
                   style={{ width: column.width || 'auto' }}
                 >
                   {column.header}
@@ -104,12 +104,14 @@ export function DataTable<T extends Record<string, unknown>>({
               {columns.map((column) => (
                 <td 
                   key={column.key} 
-                  className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-300 truncate"
+                  className="px-2 sm:px-3 lg:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-300"
                   style={{ width: column.width || 'auto' }}
                 >
-                  {column.render
-                    ? column.render(item)
-                    : (item[column.key] as ReactNode)}
+                  <div className="truncate max-w-[150px] sm:max-w-none">
+                    {column.render
+                      ? column.render(item)
+                      : (item[column.key] as ReactNode)}
+                  </div>
                 </td>
               ))}
             </tr>

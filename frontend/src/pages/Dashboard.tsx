@@ -342,7 +342,7 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-4 lg:space-y-6 w-full" style={{ maxWidth: '100%', boxSizing: 'border-box' }}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Dashboard</h1>
@@ -389,7 +389,7 @@ export const Dashboard = () => {
       </div>
       
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         <StatCard
           title="Total Devices"
           value={formatNumber(deviceStats?.total || 0)}
@@ -417,7 +417,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Detailed Statistics with Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
         {/* Alarm Statistics Chart */}
         <div className="card bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-6">
@@ -465,7 +465,7 @@ export const Dashboard = () => {
         {loadingMetrics && !systemMetrics ? (
           <p className="text-gray-400">Loading...</p>
         ) : systemMetrics ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
             {/* CPU */}
             <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
               <div className="flex items-center gap-3 mb-3">

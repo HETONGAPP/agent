@@ -31,6 +31,7 @@ const createApiClient = (): AxiosInstance => {
     headers: {
       'Content-Type': 'application/json',
     },
+    withCredentials: true,  // Enable sending cookies with requests
   });
 
   // Request interceptor
@@ -46,11 +47,8 @@ const createApiClient = (): AxiosInstance => {
         return Promise.reject(error);
       }
 
-      // Add auth token if available
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+      // Token is now stored in HttpOnly cookie, no need to manually add Authorization header
+      // The cookie will be sent automatically by the browser
       return config;
     },
     (error) => {
@@ -96,8 +94,8 @@ const createApiClient = (): AxiosInstance => {
         switch (error.response.status) {
           case 401:
             console.error('Unauthorized access');
-            // Clear invalid token and redirect to login
-            localStorage.removeItem('auth_token');
+            // Cookie will be cleared by backend on logout
+            // Redirect to login if not already there
             if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
               window.location.href = '/login';
             }

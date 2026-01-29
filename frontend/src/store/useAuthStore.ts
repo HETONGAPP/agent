@@ -44,7 +44,8 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       setToken: (token: string) => {
-        localStorage.setItem('auth_token', token);
+        // Token is now stored in HttpOnly cookie by backend
+        // We still store it in state for reference, but not in localStorage
         set({ token, isAuthenticated: true });
       },
 
@@ -58,9 +59,8 @@ export const useAuthStore = create<AuthState>()(
 
           const { access_token, user } = response.data;
           
-          // Store token
-          localStorage.setItem('auth_token', access_token);
-          
+          // Token is stored in HttpOnly cookie by backend
+          // Store token in state for reference only
           set({
             user,
             token: access_token,
@@ -94,9 +94,8 @@ export const useAuthStore = create<AuthState>()(
 
           const { access_token, user } = response.data;
           
-          // Store token
-          localStorage.setItem('auth_token', access_token);
-          
+          // Token is stored in HttpOnly cookie by backend
+          // Store token in state for reference only
           set({
             user,
             token: access_token,
@@ -133,8 +132,8 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
+          // Cookie will be cleared by backend
           // Clear local state regardless of API call result
-          localStorage.removeItem('auth_token');
           set({
             user: null,
             token: null,
@@ -163,7 +162,7 @@ export const useAuthStore = create<AuthState>()(
           });
         } catch (error: any) {
           // Token might be invalid - clear auth state
-          localStorage.removeItem('auth_token');
+          // Cookie will be handled by backend
           set({
             user: null,
             token: null,
@@ -182,7 +181,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        token: state.token,
+        // Don't persist token in localStorage - it's in HttpOnly cookie
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
@@ -190,15 +189,12 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Initialize auth state from localStorage on app start
+// Initialize auth state on app start
+// Token is stored in HttpOnly cookie, so we just try to fetch user info
 if (typeof window !== 'undefined') {
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    useAuthStore.getState().setToken(token);
-    // Try to fetch user info
-    useAuthStore.getState().fetchUserInfo().catch(() => {
-      // If fetch fails, clear invalid token
-      useAuthStore.getState().logout();
-    });
-  }
+  // Try to fetch user info - if cookie exists and is valid, user will be loaded
+  useAuthStore.getState().fetchUserInfo().catch(() => {
+    // If fetch fails, user is not authenticated (no valid cookie)
+    // This is expected behavior, so we don't need to do anything
+  });
 }

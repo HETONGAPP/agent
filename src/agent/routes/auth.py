@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -91,16 +91,19 @@ class TokenData(BaseModel):
     username: Optional[str] = None
 
 
-# Dependency to get current user from token
+# Dependency to get current user from token (supports both Cookie and Authorization header)
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
     db: Session = Depends(get_db_session),
 ) -> UserModel:
     """
     Get current authenticated user from JWT token
+    Supports both Cookie-based and Authorization header-based authentication
     
     Args:
-        credentials: HTTP bearer credentials
+        request: FastAPI request object (to read cookies)
+        credentials: HTTP bearer credentials (optional)
         db: Database session
         
     Returns:
@@ -109,7 +112,22 @@ async def get_current_user(
     Raises:
         HTTPException: If token is invalid or user not found
     """
-    token = credentials.credentials
+    token = None
+    
+    # Try to get token from Authorization header first
+    if credentials:
+        token = credentials.credentials
+    else:
+        # Fallback to cookie
+        token = request.cookies.get("access_token")
+    
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     payload = decode_access_token(token)
     
     if payload is None:
@@ -146,24 +164,24 @@ async def get_current_user(
 
 # Optional dependency - returns None if not authenticated
 async def get_current_user_optional(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
     db: Session = Depends(get_db_session),
 ) -> Optional[UserModel]:
     """
     Get current user if authenticated, None otherwise
+    Supports both Cookie-based and Authorization header-based authentication
     
     Args:
+        request: FastAPI request object (to read cookies)
         credentials: Optional HTTP bearer credentials
         db: Database session
         
     Returns:
         UserModel instance or None
     """
-    if credentials is None:
-        return None
-    
     try:
-        return await get_current_user(credentials, db)
+        return await get_current_user(request, credentials, db)
     except HTTPException:
         return None
 
@@ -413,6 +431,7 @@ If you did not request this code, please ignore this email.
     @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
     async def register(
         user_data: UserRegister,
+        response: Response,
         db: Session = Depends(get_db_session),
     ):
         """
@@ -517,6 +536,18 @@ If you did not request this code, please ignore this email.
             data={"sub": user_id, "username": user_data.username}
         )
         
+        # Set HttpOnly cookie with token
+        max_age = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            max_age=max_age,
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "").lower() == "production",  # Secure in production
+            samesite="lax",  # CSRF protection
+            path="/",
+        )
+        
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
@@ -536,6 +567,7 @@ If you did not request this code, please ignore this email.
     @router.post("/login", response_model=TokenResponse)
     async def login(
         login_data: UserLogin,
+        response: Response,
         db: Session = Depends(get_db_session),
     ):
         """
@@ -602,6 +634,18 @@ If you did not request this code, please ignore this email.
             data={"sub": user.user_id, "username": user.username}
         )
         
+        # Set HttpOnly cookie with token
+        max_age = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            max_age=max_age,
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "").lower() == "production",  # Secure in production
+            samesite="lax",  # CSRF protection
+            path="/",
+        )
+        
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
@@ -620,18 +664,28 @@ If you did not request this code, please ignore this email.
 
     @router.post("/logout")
     async def logout(
+        response: Response,
         current_user: UserModel = Depends(get_current_user),
     ):
         """
-        Logout user (client should discard token)
+        Logout user and clear authentication cookie
         
         Args:
+            response: FastAPI response object (to clear cookie)
             current_user: Current authenticated user
             
         Returns:
             Success message
         """
         logger.info(f"User logged out: {current_user.username} ({current_user.user_id})")
+        
+        # Clear authentication cookie
+        response.delete_cookie(
+            key="access_token",
+            path="/",
+            samesite="lax",
+        )
+        
         return {"message": "Successfully logged out"}
 
     @router.get("/me", response_model=UserResponse)

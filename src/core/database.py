@@ -102,6 +102,22 @@ class DiagnosticModel(Base):
     diagnostic_metadata = Column("metadata", JSON, nullable=True)  # Use diagnostic_metadata as attribute name, but keep "metadata" as column name
 
 
+class UserModel(Base):
+    """User database model for authentication"""
+    __tablename__ = "users"
+
+    user_id = Column(String(100), primary_key=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(200))
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+
+
 class Database:
     """Database connection and session management"""
 

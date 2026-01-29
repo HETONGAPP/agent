@@ -3,8 +3,9 @@ Application Dependencies
 Provides dependency injection for FastAPI endpoints
 """
 
-from typing import Optional
+from typing import Optional, Generator
 from fastapi import Depends
+from sqlalchemy.orm import Session
 
 from ..collector.mock_collector import MockCollector
 from ..storage.influxdb_client import InfluxDBClient
@@ -12,6 +13,15 @@ from ..agent.service import AgentService
 from ..agent.websocket_manager import WebSocketManager
 from ..mqtt import MQTTClient, MQTTMessageHandler
 from ..core import IntegrationManager, DataCollectionService, DeviceRegistry
+from ..core.database import get_db_session, UserModel
+
+# Import auth dependencies
+try:
+    from .routes.auth import get_current_user, get_current_user_optional
+except ImportError:
+    # Fallback if auth routes not available
+    get_current_user = None
+    get_current_user_optional = None
 
 
 # Application state (initialized in lifespan)
@@ -110,6 +120,12 @@ def get_postgres_metadata_storage():
     return _app_state.get("postgres_metadata_storage")
 
 
+# Database session dependency
+def get_db() -> Generator[Session, None, None]:
+    """Get database session dependency"""
+    yield from get_db_session()
+
+
 # Dependency functions for FastAPI
 def require_agent_service(agent_service: Optional[AgentService] = Depends(get_agent_service)) -> AgentService:
     """Dependency that requires agent service to be initialized"""
@@ -131,4 +147,3 @@ def require_influx_client(influx_client: Optional[InfluxDBClient] = Depends(get_
             detail="InfluxDB client not initialized"
         )
     return influx_client
-

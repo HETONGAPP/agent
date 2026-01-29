@@ -40,7 +40,7 @@ const createApiClient = (): AxiosInstance => {
       const now = Date.now();
       if (now < rateLimitUntil) {
         const waitTime = Math.ceil((rateLimitUntil - now) / 1000);
-        const error = new Error(`Rate limited. Please wait ${waitTime}s before retrying.`);
+        const error = new Error(`Rate limited. Please wait ${waitTime} seconds before retrying`);
         (error as any).response = { status: 429 };
         (error as any).isRateLimit = true;
         return Promise.reject(error);
@@ -79,7 +79,7 @@ const createApiClient = (): AxiosInstance => {
         
         rateLimitUntil = Date.now() + waitTime;
         
-        console.warn(`Rate limit exceeded. Blocking requests for ${Math.ceil(waitTime / 1000)}s...`);
+        console.warn(`Rate limit exceeded. Blocking requests for ${Math.ceil(waitTime / 1000)} seconds...`);
         
         // Don't retry automatically - reject immediately to prevent more requests
         return Promise.reject(error);
@@ -96,6 +96,11 @@ const createApiClient = (): AxiosInstance => {
         switch (error.response.status) {
           case 401:
             console.error('Unauthorized access');
+            // Clear invalid token and redirect to login
+            localStorage.removeItem('auth_token');
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+              window.location.href = '/login';
+            }
             break;
           case 403:
             console.error('Forbidden access');
@@ -145,7 +150,7 @@ export const apiRequest = async <T>(
         if (error.code === 'ERR_CANCELED' || error.message?.toLowerCase().includes('aborted')) {
           return {
             status: 'error',
-            message: 'Request aborted',
+            message: 'Request cancelled',
           };
         }
 
@@ -174,7 +179,7 @@ export const apiRequest = async <T>(
       }
       return {
         status: 'error',
-        message: 'Unknown error occurred',
+        message: 'Unknown error',
       };
     } finally {
       // Remove from pending requests

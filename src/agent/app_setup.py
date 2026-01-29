@@ -285,14 +285,20 @@ async def lifespan(app: FastAPI):
     email_service = None
     try:
         email_config = config.get("email", {})
-        if (
-            email_config.get("smtp_host")
-            and email_config.get("smtp_host") != "smtp.example.com"
-        ):
+        smtp_host = email_config.get("smtp_host")
+        smtp_user = email_config.get("smtp_user")
+        smtp_password = email_config.get("smtp_password")
+        
+        if smtp_host and smtp_host != "smtp.example.com" and smtp_user and smtp_password:
             email_service = EmailService.from_config(email_config)
-            logger.info(f"✓ Email service initialized: {email_config.get('smtp_host')}")
+            logger.info(f"✓ Email service initialized: {smtp_host}")
+        else:
+            logger.warning(f"⚠ Email service not configured: smtp_host={smtp_host}, smtp_user={'***' if smtp_user else None}")
     except Exception as e:
-        logger.warning(f"⚠ Email service initialization failed: {e}")
+        logger.warning(f"⚠ Email service initialization failed: {e}", exc_info=True)
+    
+    # Store email service in app state
+    set_app_state(email_service=email_service)
 
     # Initialize Device Registry
     device_registry = DeviceRegistry(

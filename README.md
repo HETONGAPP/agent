@@ -52,6 +52,25 @@ Main environment variables (`.env` file):
 - `GRAFANA_API_KEY` - Grafana API key
 - `SMTP_USER` / `SMTP_PASSWORD` - Email service configuration
 
+### Authentication (JWT)
+
+The application uses JWT (JSON Web Tokens) for user authentication. Configure the following variables:
+
+- `JWT_SECRET_KEY` - Secret key used to sign and verify JWT tokens (REQUIRED for production)
+  - Generate a secure key:
+    ```bash
+    python3 -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_urlsafe(32))"
+    ```
+  - **IMPORTANT**: Never commit this key to Git! Use a different key for each environment.
+- `ACCESS_TOKEN_EXPIRE_MINUTES` - Access token expiration time in minutes (default: `1440` = 24 hours)
+  - Recommended: `60-120` minutes for production, `1440` for development
+
+Example `.env` configuration:
+```bash
+JWT_SECRET_KEY=your_generated_secret_key_here
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+```
+
 ## Common Commands
 
 ```bash

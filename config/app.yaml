@@ -129,14 +129,19 @@ grafana:
   timeout: 30
 
 # Email configuration
+# SMTP settings for sending verification codes and alarm notifications
+# Configure these values in your .env file:
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+#   SMTP_USE_TLS, SMTP_USE_SSL, FROM_ADDRESS, FROM_NAME
 email:
-  smtp_host: smtp.example.com
-  smtp_port: 587
+  smtp_host: ${SMTP_HOST:-smtp.example.com}
+  smtp_port: ${SMTP_PORT:-587}
   smtp_user: ${SMTP_USER}
   smtp_password: ${SMTP_PASSWORD}
-  smtp_use_tls: true
-  from_address: agent@example.com
-  from_name: BESS Agent
+  smtp_use_tls: ${SMTP_USE_TLS:-true}
+  smtp_use_ssl: ${SMTP_USE_SSL:-false}
+  from_address: ${FROM_ADDRESS:-agent@example.com}
+  from_name: ${FROM_NAME:-BESS Agent}
   to_addresses:
     - engineer1@example.com
     - engineer2@example.com

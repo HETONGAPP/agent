@@ -117,16 +117,33 @@ class EmailClient:
                     msg.attach(part)
 
             # Connect to SMTP server
+            logger.debug(f"Connecting to SMTP server: {self.config.host}:{self.config.port}")
+            logger.debug(f"SMTP config: use_ssl={self.config.use_ssl}, use_tls={self.config.use_tls}")
+            logger.debug(f"SMTP user: {self.config.user}")
+            logger.debug(f"SMTP password length: {len(self.config.password) if self.config.password else 0}")
+            
             if self.config.use_ssl:
                 server = smtplib.SMTP_SSL(self.config.host, self.config.port)
             else:
                 server = smtplib.SMTP(self.config.host, self.config.port)
                 if self.config.use_tls:
+                    logger.debug("Starting TLS...")
                     server.starttls()
+                    logger.debug("TLS started successfully")
 
             # Login if credentials provided
             if self.config.user and self.config.password:
-                server.login(self.config.user, self.config.password)
+                logger.debug(f"Attempting to login with user: {self.config.user}")
+                # Check password format (Gmail app passwords are 16 characters, no spaces)
+                password_clean = self.config.password.strip()
+                if len(password_clean) != len(self.config.password):
+                    logger.warning(f"Password has leading/trailing spaces! Original length: {len(self.config.password)}, Clean length: {len(password_clean)}")
+                
+                if len(password_clean) != 16:
+                    logger.warning(f"Gmail app password should be 16 characters, but got {len(password_clean)} characters")
+                
+                server.login(self.config.user, password_clean)
+                logger.debug("SMTP login successful")
 
             # Send email
             recipients = to_addresses.copy()

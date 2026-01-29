@@ -30,6 +30,7 @@ interface SiteDiagnosticStore {
   clearDiagnostic: (siteId: string) => void;
   hasShownToast: (diagnosticId: string) => boolean;
   markToastShown: (diagnosticId: string) => void;
+  clearToastHistory: () => void;
 }
 
 export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
@@ -130,6 +131,10 @@ export const useSiteDiagnosticStore = create<SiteDiagnosticStore>()(
           newSet.add(diagnosticId);
           return { shownDiagnosticToasts: newSet };
         });
+      },
+
+      clearToastHistory: () => {
+        set({ shownDiagnosticToasts: new Set<string>() });
       },
       };
     },

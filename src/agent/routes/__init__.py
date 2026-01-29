@@ -13,6 +13,7 @@ from . import (
     metrics,
     admin,
     websocket,
+    auth,
 )
 
 __all__ = [
@@ -26,5 +27,6 @@ __all__ = [
     "metrics",
     "admin",
     "websocket",
+    "auth",
 ]
 

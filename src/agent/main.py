@@ -35,6 +35,7 @@ from .routes import (  # noqa: E402
     metrics,
     admin,
     websocket,
+    auth,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
 
     # Register routes
     health.register_health_routes(app)
+    auth.register_auth_routes(app)  # Register auth routes early
     legacy.register_legacy_routes(app)
     devices.register_device_routes(app)
     alarms.register_alarm_routes(app)

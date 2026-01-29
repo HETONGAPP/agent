@@ -172,7 +172,25 @@ def register_alarm_routes(app):
                     # No site_id provided
                     if aggregate_by_site:
                         # Return site-level summary
-                        all_containers = agent_service.container_manager.list_containers()
+                        # Get sites from site_manager first, then check containers
+                        site_ids = []
+                        if site_manager:
+                            try:
+                                all_sites = site_manager.get_all_sites()
+                                site_ids = [site.get("site_id") for site in all_sites if site.get("site_id")]
+                            except Exception as e:
+                                logger.warning(f"Failed to get sites from site_manager: {e}")
+                        
+                        # Also get containers as fallback
+                        all_containers = []
+                        if agent_service and agent_service.container_manager:
+                            try:
+                                all_containers = agent_service.container_manager.list_containers()
+                            except Exception as e:
+                                logger.warning(f"Failed to get containers: {e}")
+                        
+                        # Merge site_ids and containers, remove duplicates
+                        all_site_ids = list(dict.fromkeys([str(sid) for sid in site_ids + all_containers if sid]))
                         site_summaries = []
                         
                         def query_container_alarm_summary(container_site_id: str):
@@ -227,17 +245,13 @@ def register_alarm_routes(app):
                                 logger.warning(f"Failed to query alarms from container {container_site_id}: {e}")
                                 return None
                         
-                        # Remove duplicates and normalize
-                        normalized_containers = [str(cid) for cid in all_containers]
-                        unique_containers = list(dict.fromkeys(normalized_containers))
-                        
-                        # Execute queries in parallel (only if there are containers)
-                        if unique_containers:
-                            max_workers = min(5, len(unique_containers))
+                        # Execute queries in parallel (only if there are site_ids)
+                        if all_site_ids:
+                            max_workers = min(5, len(all_site_ids))
                             # Ensure max_workers is at least 1
                             max_workers = max(1, max_workers)
                             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                                futures = {executor.submit(query_container_alarm_summary, cid): cid for cid in unique_containers}
+                                futures = {executor.submit(query_container_alarm_summary, sid): sid for sid in all_site_ids}
                                 for future in concurrent.futures.as_completed(futures):
                                     try:
                                         result = future.result()
@@ -247,10 +261,10 @@ def register_alarm_routes(app):
                                                 result["site_id"] = str(site_id_val)
                                             site_summaries.append(result)
                                     except Exception as e:
-                                        container_id = futures[future]
-                                        logger.warning(f"Failed to query alarm summary from container {container_id}: {e}")
+                                        site_id = futures[future]
+                                        logger.warning(f"Failed to query alarm summary from site {site_id}: {e}")
                         else:
-                            logger.debug("No containers found for alarm aggregation")
+                            logger.debug("No sites found for alarm aggregation")
                         
                         # Deduplicate
                         site_summaries = deduplicate_site_summaries(site_summaries)

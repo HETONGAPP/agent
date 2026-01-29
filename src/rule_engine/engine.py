@@ -135,21 +135,6 @@ class RuleEngine:
         # Get site-specific rules if multi-site is enabled
         if self.enable_multi_site and self.site_rule_manager and device_data.site_id:
             site_rules = self.site_rule_manager.get_rules_for_site(device_data.site_id)
-            logger.info(
-                f"[RuleEngine] Site {device_data.site_id}: Loaded {len(site_rules)} rules "
-                f"(device: {device_data.device_id}, type: {device_data.device_type.value})"
-            )
-            
-            # Log SOC high rule details for debugging
-            for rule in site_rules:
-                if 'soc' in rule.get('name', '').lower() and 'high' in rule.get('name', '').lower():
-                    condition = rule.get('condition', {})
-                    threshold = condition.get('value')
-                    logger.info(
-                        f"[RuleEngine] SOC High rule found: {rule.get('id')}, "
-                        f"threshold={threshold}, enabled={rule.get('enabled', True)}, "
-                        f"device_ids={rule.get('device_ids', [])}"
-                    )
             
             # Apply site-specific thresholds
             site_rules = [
@@ -157,13 +142,12 @@ class RuleEngine:
                 for rule in site_rules
             ]
             
+            # Filter out disabled rules before creating matcher
+            enabled_rules = [r for r in site_rules if r.get("enabled", True) is not False]
+            
             # Create temporary matcher with site-specific rules
-            temp_matcher = RuleMatcher(site_rules)
+            temp_matcher = RuleMatcher(enabled_rules)
             matched_rules = temp_matcher.match(device_data, history)
-            logger.info(
-                f"[RuleEngine] Site {device_data.site_id}: Matched {len(matched_rules)} rules "
-                f"(rule_ids: {[r['rule'].get('id') for r in matched_rules]})"
-            )
         else:
             if not self.matcher:
                 logger.warning("No rules loaded, cannot evaluate")
@@ -178,11 +162,6 @@ class RuleEngine:
                     alarm = temp_matcher.create_alarm(matched_rule)
                 else:
                     alarm = self.matcher.create_alarm(matched_rule)
-                logger.info(
-                    f"[RuleEngine] Generated alarm: {alarm.alarm_id} "
-                    f"(rule_id: {alarm.metadata.get('rule_id')}, "
-                    f"alarm_type: {alarm.alarm_type}, severity: {alarm.severity})"
-                )
                 alarms.append(alarm)
             except Exception as e:
                 logger.error(f"Failed to create alarm from matched rule: {e}", exc_info=True)

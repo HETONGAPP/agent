@@ -18,10 +18,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Alarm, AlarmFilters } from '@/types';
 import { ALARM_SEVERITY } from '@/config/constants';
 import { formatRelativeTime } from '@/utils/date';
-import { exportAlarms } from '@/utils/export';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
-import { MapPin, Brain } from 'lucide-react';
+import { MapPin, Brain, RefreshCw } from 'lucide-react';
 import { useSiteStore } from '@/store/useSiteStore';
 import { DEVICE_TYPES } from '@/config/constants';
 import { generateAlarmDiagnostic } from '@/api/diagnostics';
@@ -321,15 +320,6 @@ export const AlarmManagement = () => {
   ];
 
 
-  const handleExport = () => {
-    try {
-      exportAlarms(alarms);
-      addToast('Alarms exported successfully', 'success');
-    } catch (error) {
-      addToast('Failed to export alarms', 'error');
-    }
-  };
-
   const handleSearch = (query: string) => {
     setSearchQuery(query);
   };
@@ -356,21 +346,6 @@ export const AlarmManagement = () => {
   const totalPages = totalItems > 0 ? Math.max(1, Math.ceil(totalItems / itemsPerPage)) : 1;
   const currentPage = totalItems > 0 ? Math.max(1, Math.floor(currentOffset / itemsPerPage) + 1) : 1;
   
-  // Debug logging in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[AlarmManagement] Pagination Debug:', {
-      totalItems,
-      itemsPerPage,
-      currentOffset,
-      totalPages,
-      currentPage,
-      alarmsCount: alarms.length,
-      paginationTotal: pagination.total,
-      paginationLimit: pagination.limit,
-      paginationOffset: pagination.offset,
-      filteredDataCount: filteredData.length,
-    });
-  }
 
   // Show loading state during initial data fetch
   if (initialLoading) {
@@ -379,16 +354,21 @@ export const AlarmManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1">Alarm Management</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Alarm Management</h1>
           <p className="text-gray-400 text-sm">
             View sites with alarms
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="primary" onClick={() => fetchAlarms(filters, pagination.limit, pagination.offset, true)}>
-            Refresh
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="primary"
+            onClick={() => fetchAlarms(filters, pagination.limit, pagination.offset, true)}
+            className="text-sm sm:text-base"
+          >
+            <RefreshCw size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </div>
@@ -425,9 +405,9 @@ export const AlarmManagement = () => {
           />
         }
       >
-          {/* Filter Group - Fixed width to prevent shifting */}
-          <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap flex-shrink-0">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
+          {/* Filter Group - Hidden on mobile */}
+          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Filters</span>
             <div className="h-4 w-px bg-gray-700"></div>
             
             <div className="flex items-center gap-2">
@@ -483,11 +463,11 @@ export const AlarmManagement = () => {
             </div>
           </div>
 
-          {/* Date Range Group */}
-          <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap flex-shrink-0">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider w-10 flex-shrink-0">Date</span>
-            <div className="h-4 w-px bg-gray-700 flex-shrink-0"></div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Date Range Group - Hidden on mobile */}
+          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Date</span>
+            <div className="h-4 w-px bg-gray-700"></div>
+            <div className="flex items-center gap-2">
               <DateRangePicker
             onRangeChange={(start, end) => {
               const newFilters: AlarmFilters = {
@@ -520,7 +500,7 @@ export const AlarmManagement = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="hidden sm:flex items-center gap-2 ml-auto">
             <Button variant="primary" size="sm" onClick={handleFilterChange}>
               Apply Filters
             </Button>

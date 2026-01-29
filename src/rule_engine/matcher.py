@@ -52,30 +52,6 @@ class RuleMatcher:
                         "device_data": device_data,
                         "matched_at": datetime.now(UTC),
                     })
-                    logger.info(
-                        f"[RuleMatcher] ✓ Rule {rule_id} matched for device {device_data.device_id} "
-                        f"(type: {device_data.device_type.value}, site: {device_data.site_id}, rule_name={rule.get('name')})"
-                    )
-                else:
-                    # Log why rule didn't match (condition evaluation failed)
-                    condition = rule.get("condition", {})
-                    field_path = condition.get("field")
-                    if field_path:
-                        field_value = device_data.get_field(field_path)
-                        logger.info(
-                            f"[RuleMatcher] Rule {rule_id} condition not met: "
-                            f"{field_path}={field_value}, condition: {condition.get('operator')} {condition.get('value')} "
-                            f"(device_id={device_data.device_id}, site_id={device_data.site_id})"
-                        )
-            else:
-                # Log why rule is not applicable
-                rule_device_ids = rule.get("device_ids", [])
-                rule_device_types = rule.get("device_types", [])
-                logger.debug(
-                    f"[RuleMatcher] Rule {rule_id} not applicable: "
-                    f"device_id={device_data.device_id} (rule requires: {rule_device_ids}), "
-                    f"device_type={device_data.device_type.value} (rule requires: {rule_device_types})"
-                )
 
         # Sort by priority (higher priority first)
         matched_rules.sort(key=lambda x: x["rule"].get("priority", 0), reverse=True)
@@ -142,10 +118,6 @@ class RuleMatcher:
 
         # Check device ID filter
         if rule_device_ids and device_data.device_id not in rule_device_ids:
-            logger.debug(
-                f"[RuleMatcher] Rule {rule.get('id')} not applicable: device_id={device_data.device_id} "
-                f"not in rule's device_ids={rule_device_ids}"
-            )
             return False
 
         # Check source filter
@@ -222,24 +194,16 @@ class RuleMatcher:
                 parts = temp_rule_id.split("_")
                 if len(parts) > 1:
                     temp_rule_id = "_".join(parts[:-1])
-                    logger.debug(f"Extracted base rule ID: {original_rule_id} -> {temp_rule_id}")
             
             # Step 3: Ensure RULE_ prefix exists
             if not temp_rule_id.startswith('RULE_'):
                 base_rule_id = f"RULE_{temp_rule_id}"
-                logger.debug(f"Added RULE_ prefix: {temp_rule_id} -> {base_rule_id}")
             else:
                 base_rule_id = temp_rule_id
         
         # Step 4: Generate alarm ID: RULE_{BASE_RULE_ID}_{DEVICE_ID}_{TIMESTAMP}
         alarm_id = f"{base_rule_id}_{device_id}_{timestamp}"
         
-        # Log for debugging
-        logger.info(
-            f"Generated alarm_id: {alarm_id} "
-            f"(original_rule_id: {original_rule_id}, base_rule_id: {base_rule_id}, "
-            f"device_id: {device_id}, timestamp: {timestamp})"
-        )
 
         # Build metadata
         metadata = {

@@ -16,11 +16,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Diagnostic, DiagnosticFilters } from '@/types';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/date';
-import { exportDiagnostics } from '@/utils/export';
-import { exportMultipleDiagnosticsToPDF } from '@/utils/pdf';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
-import { MapPin, Download, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Eye } from 'lucide-react';
+import { MapPin, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Eye, RefreshCw } from 'lucide-react';
 import { useSiteStore } from '@/store/useSiteStore';
 import { DiagnosticOutput } from '@/components/diagnostics/DiagnosticOutput';
 import { DiagnosticDeleteModal } from '@/components/diagnostics/DiagnosticDeleteModal';
@@ -238,29 +236,6 @@ export const DiagnosticReports = () => {
     const offset = (page - 1) * pagination.limit;
     setPagination(pagination.limit, offset);
     fetchDiagnostics(filters, pagination.limit, offset);
-  };
-
-  const handleExport = () => {
-    try {
-      exportDiagnostics(diagnostics);
-      addToast('Diagnostics exported successfully', 'success');
-    } catch (error) {
-      addToast('Failed to export diagnostics', 'error');
-    }
-  };
-
-  const handleExportPDF = async () => {
-    try {
-      if (filteredDiagnostics.length === 0) {
-        addToast('No diagnostics to export', 'warning');
-        return;
-      }
-      await exportMultipleDiagnosticsToPDF(filteredDiagnostics);
-      addToast(`Exported ${filteredDiagnostics.length} diagnostic reports as PDF`, 'success');
-    } catch (error) {
-      console.error('Failed to export PDF:', error);
-      addToast('Failed to export PDF', 'error');
-    }
   };
 
   const handleSearch = (query: string) => {
@@ -489,29 +464,22 @@ export const DiagnosticReports = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1">Diagnostic Reports</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Diagnostic Reports</h1>
           <p className="text-gray-400 text-sm">AI-powered diagnostic analysis</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="secondary" 
-            onClick={handleExportPDF} 
-            disabled={filteredDiagnostics.length === 0}
-            className="flex items-center gap-2"
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="primary"
+            onClick={() => {
+              fetchDiagnostics(filters, pagination.limit, pagination.offset);
+              fetchStats(undefined, undefined, filters); // Also refresh stats on manual refresh
+            }}
+            className="text-sm sm:text-base"
           >
-            <Download size={16} />
-            Export PDF
-          </Button>
-          <Button variant="secondary" onClick={handleExport} disabled={diagnostics.length === 0}>
-            Export CSV
-          </Button>
-          <Button variant="primary" onClick={() => {
-            fetchDiagnostics(filters, pagination.limit, pagination.offset);
-            fetchStats(undefined, undefined, filters); // Also refresh stats on manual refresh
-          }}>
-            Refresh
+            <RefreshCw size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </div>
@@ -530,14 +498,14 @@ export const DiagnosticReports = () => {
         }
       >
           {alarmIdParam && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md whitespace-nowrap flex-shrink-0">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md whitespace-nowrap flex-shrink-0">
               <span className="text-xs font-medium text-blue-300">Diagnostic ID:</span>
               <span className="font-mono text-blue-400 text-sm font-semibold">{alarmIdParam}</span>
             </div>
           )}
           
-          {/* Filter Group - Fixed width to prevent shifting */}
-          <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap flex-shrink-0">
+          {/* Filter Group - Hidden on mobile */}
+          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
             <div className="h-4 w-px bg-gray-700"></div>
             
@@ -574,8 +542,8 @@ export const DiagnosticReports = () => {
             </div>
           </div>
 
-          {/* Sort Group - Fixed width to prevent shifting */}
-          <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap flex-shrink-0">
+          {/* Sort Group - Hidden on mobile */}
+          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider w-10 flex-shrink-0">Sort</span>
             <div className="h-4 w-px bg-gray-700 flex-shrink-0"></div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -647,8 +615,8 @@ export const DiagnosticReports = () => {
             </div>
           </div>
 
-          {/* Date Range Group - Fixed width to prevent shifting */}
-          <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap flex-shrink-0">
+          {/* Date Range Group - Hidden on mobile */}
+          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap">
             <DateRangePicker
             onRangeChange={(start, end) => {
               const newFilters: DiagnosticFilters = {
@@ -683,7 +651,7 @@ export const DiagnosticReports = () => {
             />
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="hidden sm:flex items-center gap-2 ml-auto">
             <Button variant="primary" size="sm" onClick={handleFilterChange}>
               Apply Filters
             </Button>

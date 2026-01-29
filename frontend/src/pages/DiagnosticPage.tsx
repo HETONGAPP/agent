@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageLoading } from '@/components/ui/PageLoading';
 import { appConfig } from '@/config/app.config';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 
 export const DiagnosticPage = () => {
   const { siteId } = useParams<{ siteId: string }>();
@@ -96,25 +97,26 @@ export const DiagnosticPage = () => {
   return (
     <div className="w-full h-full flex flex-col bg-black">
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-4 border-b border-amber-500/20 bg-zinc-900">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 sm:p-4 border-b border-amber-500/20 bg-zinc-900">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
             onClick={() => navigate(`/sites/${siteId}`)}
-            className="border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
+            className="border-amber-500/20 text-amber-500 hover:bg-amber-500/10 text-sm sm:text-base"
           >
-            ← Back to Site
+            <ArrowLeft size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Back to Site</span>
           </Button>
-          <h1 className="text-xl font-semibold text-amber-500">Site Diagnostic</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-amber-500">Site Diagnostic</h1>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
           {/* Time Range Selector */}
           {!isRunning && (
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="bg-zinc-800 border border-amber-500/20 text-zinc-300 rounded px-3 py-2 text-sm"
+              className="bg-zinc-800 border border-amber-500/20 text-zinc-300 rounded px-3 py-2 text-sm w-full sm:w-auto"
             >
               <option value="-1h">Last Hour</option>
               <option value="-24h">Last 24 Hours</option>
@@ -140,24 +142,28 @@ export const DiagnosticPage = () => {
             <Button
               onClick={handleStartDiagnostic}
               disabled={isStarting || !isConnected}
-              className="bg-amber-500 hover:bg-amber-600 text-black"
+              className="bg-amber-500 hover:bg-amber-600 text-black text-sm sm:text-base w-full sm:w-auto"
             >
               {isStarting ? (
                 <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  Starting...
+                  <LoadingSpinner size="sm" className="sm:mr-2" />
+                  <span className="hidden sm:inline">Starting...</span>
                 </>
               ) : (
-                'Start Diagnostic'
+                <>
+                  <span className="hidden sm:inline">Start Diagnostic</span>
+                  <span className="sm:hidden">Start</span>
+                </>
               )}
             </Button>
           ) : (
             <Button
               onClick={handleReset}
               variant="outline"
-              className="border-red-500/20 text-red-400 hover:bg-red-500/10"
+              className="border-red-500/20 text-red-400 hover:bg-red-500/10 text-sm sm:text-base w-full sm:w-auto"
             >
-              Reset
+              <RefreshCw size={16} className="sm:mr-2" />
+              <span className="hidden sm:inline">Reset</span>
             </Button>
           )}
         </div>

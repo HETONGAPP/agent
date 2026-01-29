@@ -66,19 +66,16 @@ class ConditionEvaluator:
         threshold_value = condition.get("value")
 
         if field_path is None or threshold_value is None:
-            logger.debug(f"[ConditionEvaluator] Missing field_path or threshold_value: field={field_path}, threshold={threshold_value}")
             return False
 
         field_value = device_data.get_field(field_path)
         if field_value is None:
-            logger.debug(f"[ConditionEvaluator] Field '{field_path}' not found in device data. Available fields: {list(device_data.data.keys())}")
             return False
 
         try:
             field_value = float(field_value)
             threshold_value = float(threshold_value)
-        except (ValueError, TypeError) as e:
-            logger.debug(f"[ConditionEvaluator] Cannot convert to float: field_value={field_value}, threshold={threshold_value}, error={e}")
+        except (ValueError, TypeError):
             return False
 
         # Evaluate condition

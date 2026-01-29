@@ -69,8 +69,6 @@ class SiteRuleManager:
         if self.site_manager:
             try:
                 rules = self.site_manager.get_site_rules(site_id)
-                if rules:
-                    logger.debug(f"Loaded {len(rules)} rules for site {site_id} (from database or file)")
                 return rules
             except Exception as e:
                 logger.warning(f"Failed to load rules for site {site_id}: {e}")
@@ -78,16 +76,13 @@ class SiteRuleManager:
         
         # If site_manager is not available, fallback to file
         if not self.site_rules_dir or not self.site_rules_dir.exists():
-            logger.debug(f"[SiteRuleManager] No site_manager and no site_rules_dir for site {site_id}")
             return []
 
         site_rules_file = self.site_rules_dir / f"{site_id}_rules.yaml"
         if not site_rules_file.exists():
-            logger.debug(f"[SiteRuleManager] No site-specific rules file found for {site_id}")
             return []
 
         rules = self._load_rules_file(site_rules_file)
-        logger.info(f"[SiteRuleManager] Loaded {len(rules)} rules for site {site_id} from file")
         return rules
 
     def _load_site_config(self, site_id: str) -> Dict[str, Any]:
@@ -130,10 +125,6 @@ class SiteRuleManager:
 
         # Load site-specific rules (from database via site_manager)
         site_rules = self._load_site_rules(site_id)
-        logger.info(
-            f"[SiteRuleManager] Loaded {len(site_rules)} site-specific rules for site {site_id} "
-            f"(from database/file)"
-        )
 
         # Merge rules: site-specific rules first, then base rules
         # If fields overlap, base rules take precedence
@@ -141,11 +132,6 @@ class SiteRuleManager:
 
         # Cache the result
         self.site_rules_cache[site_id] = merged_rules
-
-        logger.info(
-            f"[SiteRuleManager] Cached {len(merged_rules)} merged rules for site {site_id} "
-            f"({len(site_rules)} site-specific + {len(self.global_rules)} base rules)"
-        )
 
         return merged_rules.copy()
 
@@ -317,20 +303,18 @@ class SiteRuleManager:
             # Clear rule engine cache first
             if site_id in self.site_rules_cache:
                 del self.site_rules_cache[site_id]
-                logger.debug(f"Cleared rule engine cache for site {site_id}")
             if site_id in self.site_configs:
                 del self.site_configs[site_id]
             # Clear site manager cache to ensure database is queried fresh
             if self.site_manager and hasattr(self.site_manager, 'clear_site_rules_cache'):
                 self.site_manager.clear_site_rules_cache(site_id)
-            logger.info(f"✓ Reloaded rules for site {site_id} (all caches cleared, will reload from database)")
+            logger.info(f"Reloaded rules for site {site_id}")
         else:
             self.site_rules_cache.clear()
             self.site_configs.clear()
             if self.site_manager and hasattr(self.site_manager, 'clear_site_rules_cache'):
                 self.site_manager.clear_site_rules_cache(None)
             self.global_rules = self._load_rules_file(self.global_rules_file)
-            logger.info("✓ Reloaded all site rules (all caches cleared)")
 
     def get_all_site_ids(self) -> List[str]:
         """Get list of all configured site IDs"""

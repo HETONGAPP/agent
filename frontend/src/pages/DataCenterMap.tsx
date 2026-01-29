@@ -63,13 +63,13 @@ export const DataCenterMapPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1">Data Center Map</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Data Center Map</h1>
             <p className="text-gray-400 text-sm">View and manage data center sites</p>
           </div>
-          <p className="text-gray-400 mt-1">
+          <p className="text-gray-400 mt-1 text-sm sm:text-base">
             {loading ? 'Loading sites...' : `${sites.length} site${sites.length !== 1 ? 's' : ''} configured`}
             {sites.length > 0 && (
               <span className="ml-2 text-green-400">
@@ -81,21 +81,23 @@ export const DataCenterMapPage = () => {
             <p className="text-red-400 mt-1 text-sm">Error: {error}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Button
             variant="secondary"
             onClick={() => fetchSites()}
             disabled={loading}
+            className="text-sm sm:text-base"
           >
-            <RefreshCw size={16} className="mr-2" />
-            Refresh
+            <RefreshCw size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
           <Button
             variant="primary"
             onClick={() => setShowAddSiteModal(true)}
+            className="text-sm sm:text-base"
           >
-            <Plus size={16} className="mr-2" />
-            Add Site
+            <Plus size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Add Site</span>
           </Button>
         </div>
       </div>

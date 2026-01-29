@@ -22,6 +22,14 @@
     position: relative;
   }
 
+  /* Ensure proper scrolling on mobile */
+  #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: -webkit-fill-available; /* iOS Safari */
+  }
+
   /* Mobile optimizations */
   @media (max-width: 1024px) {
     * {
@@ -46,6 +54,13 @@
     button, a {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Fix scrolling on iOS Safari */
+    @supports (-webkit-touch-callout: none) {
+      html {
+        height: -webkit-fill-available;
+      }
     }
   }
 

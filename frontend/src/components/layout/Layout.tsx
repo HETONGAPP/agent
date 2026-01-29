@@ -17,7 +17,7 @@ export const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 flex flex-col overflow-hidden">
       <Navbar />
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 overflow-hidden relative min-h-0">
         {/* Hide sidebar on mobile, show on desktop */}
         <div className="hidden lg:block">
           <Sidebar />
@@ -29,11 +29,13 @@ export const Layout = ({ children }: LayoutProps) => {
             width: '100%',
             maxWidth: '100%',
             minWidth: 0,
+            minHeight: 0,
             overflowX: 'hidden',
-            padding: '0.75rem'
+            padding: '0.75rem',
+            paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))'
           }}
         >
-          <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+          <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', paddingBottom: '4rem' }}>
             <PageTransition>
               {children}
             </PageTransition>

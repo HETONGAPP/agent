@@ -100,7 +100,6 @@ class SiteRuleManager:
 
         if all_rules:
             self._site_rules_cache[site_id] = all_rules
-            logger.info(f"✓ Using {len(all_rules)} rules from DATABASE for site {site_id}")
             return all_rules.copy()
 
         logger.warning(
@@ -354,7 +353,6 @@ class SiteRuleManager:
                     logger.warning(f"Failed to clear alarms for rule {rule_id} in site {site_id}: {e}")
 
             self.reload_site_rules(site_id)
-            logger.info(f"Updated rule {rule_id} for site {site_id}")
             return True
         except Exception as e:
             logger.error(f"Failed to update rule for site {site_id}: {e}", exc_info=True)

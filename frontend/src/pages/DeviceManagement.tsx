@@ -18,10 +18,9 @@ import { Device, DeviceFilters } from '@/types';
 import { DEVICE_TYPES, DEVICE_STATUS } from '@/config/constants';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/date';
 import { formatDeviceId } from '@/utils/format';
-import { exportDevices } from '@/utils/export';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
-import { MapPin } from 'lucide-react';
+import { MapPin, RefreshCw } from 'lucide-react';
 import { PageLoading } from '@/components/ui/PageLoading';
 
 export const DeviceManagement = () => {
@@ -215,16 +214,6 @@ export const DeviceManagement = () => {
     fetchDevices();
   };
 
-
-  const handleExport = () => {
-    try {
-      exportDevices(devices);
-      addToast('Devices exported successfully', 'success');
-    } catch (error) {
-      addToast('Failed to export devices', 'error');
-    }
-  };
-
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     // Filter devices client-side for now
@@ -329,25 +318,27 @@ export const DeviceManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1">Device Management</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Device Management</h1>
             <p className="text-gray-400 text-sm">Manage and monitor all devices</p>
           </div>
           {connected ? (
-            <span className="flex items-center gap-2 text-sm text-green-400 ml-4">
+            <span className="flex items-center gap-2 text-sm text-green-400 ml-0 sm:ml-4">
               <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse"></span>
               Live
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={handleExport} disabled={devices.length === 0}>
-            Export CSV
-          </Button>
-          <Button variant="secondary" onClick={() => fetchDevices(filters)}>
-            Refresh
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="secondary"
+            onClick={() => fetchDevices(filters)}
+            className="text-sm sm:text-base"
+          >
+            <RefreshCw size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </div>
@@ -384,9 +375,9 @@ export const DeviceManagement = () => {
           />
         }
       >
-          {/* Filter Group - Fixed width to prevent shifting */}
-          <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap flex-shrink-0">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
+          {/* Filter Group - Hidden on mobile */}
+          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Filters</span>
             <div className="h-4 w-px bg-gray-700"></div>
             
             <div className="flex items-center gap-2">
@@ -424,7 +415,7 @@ export const DeviceManagement = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="hidden sm:flex items-center gap-2 ml-auto">
             <Button variant="primary" size="sm" onClick={handleFilterChange}>
               Apply Filters
             </Button>

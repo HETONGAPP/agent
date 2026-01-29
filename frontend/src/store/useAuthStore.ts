@@ -145,23 +145,20 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchUserInfo: async () => {
-        const { token } = get();
-        if (!token) {
-          set({ isAuthenticated: false, user: null });
-          return;
-        }
-
+        // Token is stored in HttpOnly cookie, so we don't check token in state
+        // Just try to fetch user info - if cookie exists and is valid, API will return user data
         set({ isLoading: true, error: null });
         try {
           const response = await apiClient.get('/api/auth/me');
           set({
             user: response.data,
+            token: response.data?.user_id || null, // Store a reference (not the actual token)
             isAuthenticated: true,
             isLoading: false,
             error: null,
           });
         } catch (error: any) {
-          // Token might be invalid - clear auth state
+          // Cookie might be invalid or expired - clear auth state
           // Cookie will be handled by backend
           set({
             user: null,
@@ -190,11 +187,15 @@ export const useAuthStore = create<AuthState>()(
 );
 
 // Initialize auth state on app start
-// Token is stored in HttpOnly cookie, so we just try to fetch user info
+// Token is stored in HttpOnly cookie, so we try to fetch user info to check authentication
 if (typeof window !== 'undefined') {
+  // Set initial loading state
+  useAuthStore.setState({ isLoading: true });
+  
   // Try to fetch user info - if cookie exists and is valid, user will be loaded
   useAuthStore.getState().fetchUserInfo().catch(() => {
     // If fetch fails, user is not authenticated (no valid cookie)
     // This is expected behavior, so we don't need to do anything
+    // Loading state will be set to false in fetchUserInfo
   });
 }

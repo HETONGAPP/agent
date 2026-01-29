@@ -37,20 +37,22 @@ export const Button = ({
 
   return (
     <motion.button
-      className={`${variantClasses[variant]} ${sizeClasses[size]} ${className} disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium transition-all duration-300 relative overflow-hidden`}
+      className={`${variantClasses[variant]} ${sizeClasses[size]} ${className} disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium transition-all duration-200 relative overflow-hidden`}
+      style={{ willChange: 'transform' }}
       disabled={disabled || loading}
-      whileHover={disabled || loading ? {} : { scale: 1.02, y: -2 }}
+      whileHover={disabled || loading ? {} : { scale: 1.02 }}
       whileTap={disabled || loading ? {} : { scale: 0.98 }}
-      transition={{ duration: 0.2, type: "spring", stiffness: 400 }}
+      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
       {...props}
     >
-      {/* Shine effect on hover */}
+      {/* Shine effect on hover - optimized */}
       {!disabled && !loading && (
         <motion.div
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none"
+          style={{ willChange: 'transform' }}
           initial={{ x: '-100%' }}
           whileHover={{ x: '100%' }}
-          transition={{ duration: 0.6, ease: "easeInOut" }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         />
       )}
       <span className="relative z-10 flex items-center gap-2">

@@ -26,9 +26,10 @@ export const Sidebar = () => {
       className={`bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/50 min-h-screen relative shadow-xl ${
         isCollapsed ? 'w-16' : 'w-64'
       }`}
+      style={{ willChange: 'width' }}
       initial={false}
       animate={{ width: isCollapsed ? 64 : 256 }}
-      transition={{ duration: 0.3, ease: "easeInOut" }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Toggle Button */}
       <motion.button
@@ -53,9 +54,9 @@ export const Sidebar = () => {
             return (
               <motion.li
                 key={item.path}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.03, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               >
                 <Link
                   to={item.path}
@@ -69,13 +70,15 @@ export const Sidebar = () => {
                   {isActive && (
                     <motion.div
                       className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full"
+                      style={{ willChange: 'transform' }}
                       layoutId="activeIndicator"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 35, mass: 0.5 }}
                     />
                   )}
                   <motion.div
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    transition={{ type: "spring", stiffness: 400 }}
+                    style={{ willChange: 'transform' }}
+                    whileHover={{ scale: 1.1 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <item.icon size={20} className="flex-shrink-0" />
                   </motion.div>
@@ -83,10 +86,11 @@ export const Sidebar = () => {
                     {!isCollapsed && (
                       <motion.span
                         className="whitespace-nowrap overflow-hidden font-medium"
-                        initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: "auto" }}
-                        exit={{ opacity: 0, width: 0 }}
-                        transition={{ duration: 0.2 }}
+                        style={{ willChange: 'opacity' }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                       >
                         {item.label}
                       </motion.span>
@@ -96,10 +100,11 @@ export const Sidebar = () => {
                   {/* Enhanced Tooltip for collapsed state */}
                   {isCollapsed && (
                     <motion.div
-                      className="absolute left-full ml-2 px-3 py-2 bg-gray-900/95 backdrop-blur-md text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl border border-gray-700"
-                      initial={{ opacity: 0, x: -10 }}
-                      whileHover={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
+                      className="absolute left-full ml-2 px-3 py-2 bg-gray-900/95 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl border border-gray-700"
+                      style={{ willChange: 'opacity, transform' }}
+                      initial={{ opacity: 0 }}
+                      whileHover={{ opacity: 1 }}
+                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                     >
                       {item.label}
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 rotate-45 border-l border-t border-gray-700"></div>

@@ -61,15 +61,17 @@ export const Login = () => {
       >
         <motion.div
           className="bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-700"
+          style={{ willChange: 'transform, opacity' }}
           initial={{ opacity: 0, y: -100, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{
-            duration: 0.8,
+            duration: 0.6,
             type: "spring",
-            stiffness: 100,
-            damping: 15,
+            stiffness: 120,
+            damping: 20,
+            mass: 0.8,
           }}
-          whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
+          whileHover={{ scale: 1.01 }}
         >
           {/* Header */}
           <motion.div
@@ -83,29 +85,29 @@ export const Login = () => {
                 src={logoIcon}
                 alt="BESS Agent Logo"
                 className="h-20 w-auto mb-4"
-                initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
-                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                style={{ willChange: 'transform, opacity' }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{
-                  duration: 0.7,
-                  type: "spring",
-                  stiffness: 200,
+                  duration: 0.5,
                   delay: 0.4,
+                  ease: [0.16, 1, 0.3, 1],
                 }}
-                whileHover={{ rotate: 5, scale: 1.05 }}
+                whileHover={{ scale: 1.05 }}
               />
               <motion.h1
                 className="text-3xl font-bold text-white mb-2"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.5 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
               >
                 Login
               </motion.h1>
               <motion.p
                 className="text-gray-400"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.6 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
               >
                 Welcome back
               </motion.p>
@@ -117,10 +119,11 @@ export const Login = () => {
             {displayError && (
               <motion.div
                 className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg"
-                initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                transition={{ duration: 0.3 }}
+                style={{ willChange: 'transform, opacity' }}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
               >
                 <p className="text-red-300 text-sm">{displayError}</p>
               </motion.div>
@@ -136,9 +139,9 @@ export const Login = () => {
             transition={{ duration: 0.5, delay: 0.7 }}
           >
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.8 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
             >
               <label
                 htmlFor="username"
@@ -155,15 +158,15 @@ export const Login = () => {
                 placeholder="Enter username or email"
                 disabled={isLoading}
                 autoComplete="username"
-                whileFocus={{ scale: 1.02, borderColor: "#3B82F6" }}
-                transition={{ duration: 0.2 }}
+                whileFocus={{ scale: 1.01 }}
+                transition={{ duration: 0.15 }}
               />
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.9 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.9, ease: [0.16, 1, 0.3, 1] }}
             >
               <label
                 htmlFor="password"
@@ -180,15 +183,15 @@ export const Login = () => {
                 placeholder="Enter password"
                 disabled={isLoading}
                 autoComplete="current-password"
-                whileFocus={{ scale: 1.02, borderColor: "#3B82F6" }}
-                transition={{ duration: 0.2 }}
+                whileFocus={{ scale: 1.01 }}
+                transition={{ duration: 0.15 }}
               />
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 1.0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 1.0, ease: [0.16, 1, 0.3, 1] }}
             >
               <Button
                 type="submit"
@@ -205,9 +208,9 @@ export const Login = () => {
           {/* Register Link */}
           <motion.div
             className="mt-6 text-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 1.1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 1.1, ease: [0.16, 1, 0.3, 1] }}
           >
             <p className="text-gray-400 text-sm">
               Don't have an account?{' '}

@@ -22,11 +22,12 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const hasClearedToasts = useRef(false);
 
   useEffect(() => {
-    // If we have a token but user info is not loaded, fetch it
-    if (token && !isAuthenticated && !isLoading) {
+    // On mount, try to fetch user info if not authenticated
+    // Token is in HttpOnly cookie, so we don't check token in state
+    if (!isAuthenticated && !isLoading) {
       fetchUserInfo();
     }
-  }, [token, isAuthenticated, isLoading, fetchUserInfo]);
+  }, [isAuthenticated, isLoading, fetchUserInfo]);
 
   // Clear all notifications when user successfully authenticates
   useEffect(() => {

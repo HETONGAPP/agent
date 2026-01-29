@@ -46,10 +46,11 @@ export const Navbar = () => {
 
   return (
     <motion.nav
-      className="bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 border-b border-gray-700/50 px-6 py-4 shadow-lg backdrop-blur-sm"
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      className="bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 border-b border-gray-700/50 px-6 py-4 shadow-lg"
+      style={{ willChange: 'transform, opacity' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-all duration-300 group">
@@ -57,8 +58,9 @@ export const Navbar = () => {
             src={logoIcon}
             alt="BESS Agent Logo"
             className="h-10 w-auto"
-            whileHover={{ scale: 1.1, rotate: 5 }}
-            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            style={{ willChange: 'transform' }}
+            whileHover={{ scale: 1.05 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           />
           <div className="flex flex-col">
             <h1 className="text-base font-semibold text-white leading-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
@@ -72,9 +74,11 @@ export const Navbar = () => {
             <div className="relative" ref={menuRef}>
               <motion.button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 rounded-xl text-white transition-all duration-300 shadow-md hover:shadow-lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 rounded-xl text-white transition-all duration-200 shadow-md hover:shadow-lg"
+                style={{ willChange: 'transform' }}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.15 }}
               >
                 <User className="w-4 h-4" />
                 <span className="text-sm font-medium">
@@ -91,11 +95,12 @@ export const Navbar = () => {
               <AnimatePresence>
                 {showUserMenu && (
                   <motion.div
-                    className="absolute right-0 mt-2 w-56 bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-700/50 py-2 z-50 overflow-hidden"
-                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 mt-2 w-56 bg-gray-800/95 rounded-xl shadow-2xl border border-gray-700/50 py-2 z-50 overflow-hidden"
+                    style={{ willChange: 'transform, opacity' }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                   >
                     <div className="px-4 py-3 border-b border-gray-700/50 bg-gradient-to-r from-gray-800/50 to-transparent">
                       <p className="text-sm font-medium text-white">{user.full_name || user.username}</p>
@@ -105,8 +110,9 @@ export const Navbar = () => {
                       onClick={handleLogout}
                       disabled={isLoading}
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                      whileHover={{ x: 4 }}
-                      transition={{ duration: 0.2 }}
+                      style={{ willChange: 'transform' }}
+                      whileHover={{ x: 2 }}
+                      transition={{ duration: 0.15 }}
                     >
                       <LogOut className="w-4 h-4" />
                       Logout

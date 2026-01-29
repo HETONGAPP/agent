@@ -90,12 +90,13 @@ export const StatCard = ({
 
   return (
     <motion.div
-      className={`card card-hover border ${colorClasses[color]} ${onClick ? 'cursor-pointer' : ''} backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl relative overflow-hidden`}
-      whileHover={{ scale: 1.03, y: -4 }}
+      className={`card card-hover border ${colorClasses[color]} ${onClick ? 'cursor-pointer' : ''} rounded-xl shadow-lg hover:shadow-xl relative overflow-hidden`}
+      style={{ willChange: 'transform, opacity' }}
+      whileHover={{ scale: 1.02 }}
       onClick={onClick}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, type: "spring", stiffness: 100 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Decorative gradient overlay */}
       <div className={`absolute top-0 right-0 w-32 h-32 ${iconBgClasses[color]} rounded-full blur-3xl opacity-30 -z-0`} />
@@ -122,9 +123,10 @@ export const StatCard = ({
         </div>
         {icon && (
           <motion.div
-            className={`${isLucideIcon ? iconColorClasses[color] : 'opacity-60'} p-3 rounded-xl ${iconBgClasses[color]} backdrop-blur-sm`}
-            whileHover={{ scale: 1.1, rotate: 5 }}
-            transition={{ type: "spring", stiffness: 400 }}
+            className={`${isLucideIcon ? iconColorClasses[color] : 'opacity-60'} p-3 rounded-xl ${iconBgClasses[color]}`}
+            style={{ willChange: 'transform' }}
+            whileHover={{ scale: 1.05 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
             {renderIcon()}
           </motion.div>

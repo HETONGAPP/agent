@@ -83,6 +83,13 @@
 }
 
 @layer utilities {
+  /* Performance optimizations */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+  
   /* Scrollbar styles */
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;

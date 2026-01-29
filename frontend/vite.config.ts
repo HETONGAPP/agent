@@ -11,11 +11,16 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    host: '0.0.0.0', // Allow LAN access
+    port: 3001,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        // Ensure cookies and credentials are passed correctly
+        cookieDomainRewrite: '', // Keep original domain
+        // Ensure WebSocket and HTTP requests are proxied correctly
+        ws: true,
       },
     },
   },

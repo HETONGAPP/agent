@@ -117,23 +117,31 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        console.log('[AuthStore] Logout called');
         set({ isLoading: true });
         try {
-          // Call logout endpoint if authenticated
-          const { token } = get();
-          if (token) {
-            try {
-              await apiClient.post('/api/auth/logout');
-            } catch (error) {
-              // Ignore logout errors - still clear local state
-              console.warn('Logout API call failed:', error);
+          // Call logout endpoint to clear cookie
+          // Token is stored in HttpOnly cookie, so we always try to call logout API
+          // The backend will clear the cookie even if token is not in state
+          console.log('[AuthStore] Calling logout API...');
+          try {
+            await apiClient.post('/api/auth/logout');
+            console.log('[AuthStore] Logout API call successful');
+          } catch (error: any) {
+            // Ignore 401 errors during logout - this is expected if cookie is already invalid
+            // Also ignore other logout errors - still clear local state
+            if (error?.response?.status === 401) {
+              console.log('[AuthStore] Logout API returned 401 (expected if already logged out)');
+            } else {
+              console.warn('[AuthStore] Logout API call failed:', error);
             }
           }
         } catch (error) {
-          console.error('Logout error:', error);
+          console.error('[AuthStore] Logout error:', error);
         } finally {
-          // Cookie will be cleared by backend
+          // Cookie will be cleared by backend (or already cleared)
           // Clear local state regardless of API call result
+          console.log('[AuthStore] Clearing local auth state');
           set({
             user: null,
             token: null,
@@ -141,6 +149,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
+          console.log('[AuthStore] Logout complete');
         }
       },
 

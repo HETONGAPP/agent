@@ -424,9 +424,9 @@ export const SiteDetails = () => {
       </div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-gray-700/50">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-gray-700/50">
         <div>
-          <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">{selectedSite.site_name}</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2 tracking-tight">{selectedSite.site_name}</h1>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-gray-400 text-sm font-mono bg-gray-800/50 px-2.5 py-1 rounded-md border border-gray-700/50 flex-shrink-0">
                 ID: {selectedSite.site_id}
@@ -445,7 +445,7 @@ export const SiteDetails = () => {
               )}
             </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             variant="primary"
             size="sm"
@@ -566,7 +566,7 @@ export const SiteDetails = () => {
       </div>
 
       {/* Site Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {selectedSite.location && (
           <div className="card flex items-center gap-4 p-5 border border-gray-700/50 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 group">
             <div className="p-3 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors border border-blue-500/20">

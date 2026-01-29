@@ -28,7 +28,9 @@ export interface AppConfig {
 
 const defaultConfig: AppConfig = {
   api: {
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+    // Use relative path in development to leverage Vite proxy
+    // In production, use full URL or environment variable
+    baseUrl: import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '' : 'http://localhost:8000'),
     timeout: 300000, // 5 minutes (300 seconds) - increased for long-running diagnostic tasks
   },
   features: {
@@ -54,10 +56,16 @@ const defaultConfig: AppConfig = {
  * Can be overridden by environment variables
  */
 export const getAppConfig = (): AppConfig => {
+  // In development, use empty string to leverage Vite proxy
+  // In production, use full URL
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL 
+    ? import.meta.env.VITE_API_BASE_URL 
+    : (import.meta.env.DEV ? '' : 'http://localhost:8000');
+  
   return {
     ...defaultConfig,
     api: {
-      baseUrl: import.meta.env.VITE_API_BASE_URL || defaultConfig.api.baseUrl,
+      baseUrl: apiBaseUrl,
       timeout: Number(import.meta.env.VITE_API_TIMEOUT) || defaultConfig.api.timeout,
     },
     features: {

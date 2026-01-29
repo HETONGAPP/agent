@@ -145,8 +145,8 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
 
   return (
     <div className="card">
-      <h2 className="text-xl font-semibold text-white mb-4">Sites Overview</h2>
-      <div className="space-y-3">
+      <h2 className="text-lg sm:text-xl font-semibold text-white mb-3 sm:mb-4">Sites Overview</h2>
+      <div className="space-y-2 sm:space-y-3">
         {sites.map((site) => {
           const stats = siteStats[site.site_id];
           const status = getSiteStatus(site, stats);
@@ -159,33 +159,33 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
             <div
               key={site.site_id}
               onClick={() => handleSiteClick(site)}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg ${getStatusColor(status)}`}
+              className={`p-3 sm:p-4 rounded-lg border-2 cursor-pointer transition-all hover:scale-[1.01] sm:hover:scale-[1.02] hover:shadow-lg ${getStatusColor(status)}`}
             >
               <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                       {getStatusIcon(status)}
-                      <h3 className="text-lg font-semibold text-white">{site.site_name}</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-white truncate">{site.site_name}</h3>
                       {status !== 'unknown' && <Badge type="status" value={status} size="sm" />}
                       {status === 'unknown' && (
-                        <span className="px-2 py-0.5 text-xs border border-gray-600/50 bg-gray-600/10 text-gray-400 rounded">
+                        <span className="px-2 py-0.5 text-xs border border-gray-600/50 bg-gray-600/10 text-gray-400 rounded whitespace-nowrap">
                           Loading...
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mt-2 sm:mt-3">
                     {/* Site ID and Location */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400">
                         <span className="font-mono text-xs">ID:</span>
-                        <span className="text-gray-300">{site.site_id}</span>
+                        <span className="text-gray-300 truncate">{site.site_id}</span>
                       </div>
                       {site.location && (
-                        <div className="flex items-center gap-2 text-sm text-gray-400">
-                          <MapPin size={14} />
-                          <span>{site.location}</span>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400">
+                          <MapPin size={12} className="sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                          <span className="truncate">{site.location}</span>
                         </div>
                       )}
                       {site.timezone && (
@@ -196,12 +196,12 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
                     </div>
 
                     {/* Statistics */}
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       {stats ? (
                         <>
-                          <div className="flex items-center gap-4 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Plug size={14} className="text-blue-400" />
+                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <Plug size={12} className="sm:w-3.5 sm:h-3.5 text-blue-400 flex-shrink-0" />
                               <span className="text-gray-300">
                                 {activeDevices}/{totalDevices} Devices
                               </span>
@@ -209,12 +209,12 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
                           </div>
                           
                           {totalAlarms > 0 && (
-                            <div className="flex items-center gap-2 text-sm">
+                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
                               <AlertTriangle 
-                                size={14} 
-                                className={criticalAlarms > 0 ? 'text-red-400' : 'text-yellow-400'} 
+                                size={12} 
+                                className={`sm:w-3.5 sm:h-3.5 flex-shrink-0 ${criticalAlarms > 0 ? 'text-red-400' : 'text-yellow-400'}`}
                               />
-                              <span className={criticalAlarms > 0 ? 'text-red-400' : 'text-yellow-400'}>
+                              <span className={`${criticalAlarms > 0 ? 'text-red-400' : 'text-yellow-400'}`}>
                                 {totalAlarms} Alarm{totalAlarms !== 1 ? 's' : ''}
                                 {criticalAlarms > 0 && ` (${criticalAlarms} Critical)`}
                               </span>
@@ -222,14 +222,14 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
                           )}
                           
                           {totalAlarms === 0 && (
-                            <div className="flex items-center gap-2 text-sm text-green-400">
-                              <CheckCircle size={14} />
+                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-green-400">
+                              <CheckCircle size={12} className="sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                               <span>No Alarms</span>
                             </div>
                           )}
                         </>
                       ) : (
-                        <div className="text-sm text-gray-500">
+                        <div className="text-xs sm:text-sm text-gray-500">
                           Loading statistics...
                         </div>
                       )}

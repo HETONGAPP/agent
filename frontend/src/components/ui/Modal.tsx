@@ -48,20 +48,22 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalPr
           />
           
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
             <motion.div
-              className={`bg-gray-800 rounded-lg shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden flex flex-col`}
+              className={`bg-gray-800 rounded-lg shadow-2xl w-full ${sizeClasses[size]} max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col`}
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
               {/* Header - Only show if title is provided */}
               {title && (
-              <div className="flex items-center justify-between p-4 border-b border-gray-700">
-                <h2 className="text-xl font-bold text-white">{title}</h2>
+              <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700">
+                <h2 className="text-lg sm:text-xl font-bold text-white truncate pr-2">{title}</h2>
                 <button
                   onClick={onClose}
-                    className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
+                  className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700 flex-shrink-0"
+                  aria-label="Close modal"
                 >
                   <X size={20} />
                 </button>
@@ -69,7 +71,7 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalPr
               )}
               
               {/* Content */}
-              <div className={title ? "p-4 overflow-y-auto flex-1" : "overflow-y-auto flex-1"}>
+              <div className={title ? "p-3 sm:p-4 overflow-y-auto flex-1" : "p-3 sm:p-4 overflow-y-auto flex-1"}>
                 {children}
               </div>
             </motion.div>

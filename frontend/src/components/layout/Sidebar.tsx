@@ -4,8 +4,9 @@
  */
 
 import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, LayoutDashboard, Map, Plug, Bell, FileText, Workflow } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutDashboard, Map, Plug, Bell, FileText, Workflow, X } from 'lucide-react';
 import { useSidebarStore } from '@/store/useSidebarStore';
 
 const navigationItems = [
@@ -19,22 +20,71 @@ const navigationItems = [
 
 export const Sidebar = () => {
   const location = useLocation();
-  const { isCollapsed, toggle } = useSidebarStore();
+  const { isCollapsed, isMobileOpen, toggle, closeMobile } = useSidebarStore();
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    if (isMobileOpen) {
+      closeMobile();
+    }
+  }, [location.pathname, isMobileOpen, closeMobile]);
 
   return (
-    <motion.aside
-      className={`bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/50 min-h-screen relative shadow-xl ${
-        isCollapsed ? 'w-16' : 'w-64'
-      }`}
-      style={{ willChange: 'width' }}
-      initial={false}
-      animate={{ width: isCollapsed ? 64 : 256 }}
-      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {/* Toggle Button */}
+    <>
+      {/* Mobile overlay */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeMobile}
+          />
+        )}
+      </AnimatePresence>
+
+      <motion.aside
+        className={`bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/50 min-h-screen relative shadow-xl ${
+          isCollapsed ? 'w-16' : 'w-64'
+        } fixed lg:relative z-50 lg:z-auto`}
+        style={{ willChange: 'width, transform' }}
+        initial={false}
+        animate={{ 
+          width: isCollapsed ? 64 : 256,
+          x: isMobile && !isMobileOpen ? -256 : 0
+        }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      >
+      {/* Mobile close button */}
+      <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-700/50">
+        <h2 className="text-white font-semibold">Menu</h2>
+        <motion.button
+          onClick={closeMobile}
+          className="p-2 rounded-lg text-gray-300 hover:bg-gray-700 transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          aria-label="Close menu"
+        >
+          <X className="w-5 h-5" />
+        </motion.button>
+      </div>
+
+      {/* Desktop Toggle Button */}
       <motion.button
         onClick={toggle}
-        className="absolute -right-3 top-20 z-10 w-6 h-6 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 border border-gray-600 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm"
+        className="hidden lg:flex absolute -right-3 top-20 z-10 w-6 h-6 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 border border-gray-600 rounded-full items-center justify-center shadow-lg"
         aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
@@ -116,7 +166,8 @@ export const Sidebar = () => {
           })}
         </ul>
       </nav>
-    </motion.aside>
+      </motion.aside>
+    </>
   );
 };
 

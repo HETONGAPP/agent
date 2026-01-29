@@ -52,7 +52,7 @@ export const Login = () => {
   const displayError = localError || error;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4 py-8">
       <motion.div
         className="max-w-md w-full"
         initial={{ opacity: 0 }}
@@ -60,7 +60,7 @@ export const Login = () => {
         transition={{ duration: 0.5 }}
       >
         <motion.div
-          className="bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-700"
+          className="bg-gray-800 rounded-lg shadow-xl p-6 sm:p-8 border border-gray-700"
           style={{ willChange: 'transform, opacity' }}
           initial={{ opacity: 0, y: -100, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}

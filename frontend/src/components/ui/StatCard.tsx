@@ -59,7 +59,7 @@ export const StatCard = ({
     // This must be checked FIRST before any object checks
     if (typeof icon === 'function') {
       const IconComponent = icon as LucideIcon;
-      return <IconComponent size={32} strokeWidth={1.5} />;
+      return <IconComponent size={28} className="sm:w-8 sm:h-8" strokeWidth={1.5} />;
     }
     
     // Type guard: Check if it's a primitive value (safe to render)
@@ -102,9 +102,9 @@ export const StatCard = ({
       <div className={`absolute top-0 right-0 w-32 h-32 ${iconBgClasses[color]} rounded-full blur-3xl opacity-30 -z-0`} />
       
       <div className="flex items-center justify-between relative z-10">
-        <div className="flex-1">
-          <p className="text-sm text-gray-400 mb-2 font-medium uppercase tracking-wide">{title}</p>
-          <p className="text-3xl font-bold text-white mb-1 bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2 font-medium uppercase tracking-wide truncate">{title}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-white mb-1 bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent truncate">
             {value}
           </p>
           {trend && (
@@ -123,12 +123,16 @@ export const StatCard = ({
         </div>
         {icon && (
           <motion.div
-            className={`${isLucideIcon ? iconColorClasses[color] : 'opacity-60'} p-3 rounded-xl ${iconBgClasses[color]}`}
+            className={`${isLucideIcon ? iconColorClasses[color] : 'opacity-60'} p-2 sm:p-3 rounded-lg sm:rounded-xl ${iconBgClasses[color]} flex-shrink-0`}
             style={{ willChange: 'transform' }}
             whileHover={{ scale: 1.05 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
-            {renderIcon()}
+            {typeof icon === 'function' ? (
+              <icon size={24} className="sm:w-8 sm:h-8" strokeWidth={1.5} />
+            ) : (
+              renderIcon()
+            )}
           </motion.div>
         )}
       </div>

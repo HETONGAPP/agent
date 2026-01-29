@@ -34,18 +34,19 @@ export const Pagination = ({
   const endItem = safeTotalItems > 0 ? Math.min(safeCurrentPage * safeItemsPerPage, safeTotalItems) : 0;
 
   return (
-    <div className="flex items-center justify-between mt-4">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mt-4">
+      <div className="flex items-center justify-center sm:justify-start gap-2">
         <Button
           variant="secondary"
           size="sm"
           onClick={() => onPageChange(safeCurrentPage - 1)}
           disabled={safeCurrentPage === 1}
+          className="flex-1 sm:flex-none"
         >
-          Previous
+          <span className="text-xs sm:text-sm">Previous</span>
         </Button>
         
-        <span className="text-sm text-gray-300 px-4">
+        <span className="text-xs sm:text-sm text-gray-300 px-2 sm:px-4 whitespace-nowrap">
           Page {safeCurrentPage} of {safeTotalPages}
         </span>
         
@@ -54,13 +55,14 @@ export const Pagination = ({
           size="sm"
           onClick={() => onPageChange(safeCurrentPage + 1)}
           disabled={safeCurrentPage === safeTotalPages}
+          className="flex-1 sm:flex-none"
         >
-          Next
+          <span className="text-xs sm:text-sm">Next</span>
         </Button>
       </div>
       
       {safeTotalItems > 0 && (
-        <div className="text-sm text-gray-400">
+        <div className="text-xs sm:text-sm text-gray-400 text-center sm:text-right">
           Showing {startItem} to {endItem} of {safeTotalItems} items
         </div>
       )}

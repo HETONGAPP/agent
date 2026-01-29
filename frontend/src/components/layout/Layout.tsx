@@ -14,16 +14,13 @@ interface LayoutProps {
 }
 
 export const Layout = ({ children }: LayoutProps) => {
-  const { isCollapsed } = useSidebarStore();
-
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 flex flex-col overflow-hidden">
       <Navbar />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         <Sidebar />
         <main 
-          className="flex-1 p-6 transition-all duration-300 overflow-y-auto bg-gradient-to-b from-transparent to-gray-900/50 scrollbar-thin"
-          style={{ marginLeft: 0 }}
+          className="flex-1 p-4 sm:p-6 transition-all duration-300 overflow-y-auto bg-gradient-to-b from-transparent to-gray-900/50 scrollbar-thin lg:ml-0"
         >
           <PageTransition>
             {children}

@@ -342,31 +342,32 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1">Dashboard</h1>
-          <p className="text-gray-400 text-sm">System overview and statistics</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Dashboard</h1>
+          <p className="text-gray-400 text-xs sm:text-sm">System overview and statistics</p>
         </div>
         {/* Weather Widget */}
         {!userLocation ? (
-          <div className="flex items-center gap-2 text-gray-400 text-sm">
-            <Cloud size={16} />
-            <span>Location permission needed for weather</span>
+          <div className="flex items-center gap-2 text-gray-400 text-xs sm:text-sm">
+            <Cloud size={14} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Location permission needed for weather</span>
+            <span className="sm:hidden">Location needed</span>
           </div>
         ) : loadingWeather ? (
           <div className="flex items-center gap-2 text-gray-400">
-            <Cloud size={20} />
-            <span className="text-sm">Loading...</span>
+            <Cloud size={18} className="sm:w-5 sm:h-5" />
+            <span className="text-xs sm:text-sm">Loading...</span>
           </div>
         ) : weather ? (
-          <div className="flex items-center gap-3 bg-gray-800/50 rounded-lg px-4 py-2 border border-gray-700/50">
+          <div className="flex items-center gap-2 sm:gap-3 bg-gray-800/50 rounded-lg px-3 sm:px-4 py-2 border border-gray-700/50">
             <div className="flex items-center gap-2">
               {weather.icon && (
                 <img
                   src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
                   alt={weather.description}
-                  className="w-10 h-10"
+                  className="w-8 h-8 sm:w-10 sm:h-10"
                   onError={(e) => {
                     // Fallback to icon if image fails to load
                     (e.target as HTMLImageElement).style.display = 'none';
@@ -374,9 +375,9 @@ export const Dashboard = () => {
                 />
               )}
               <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-white">{weather.temperature}°C</span>
-                  <Cloud className="text-blue-400" size={20} />
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-xl sm:text-2xl font-bold text-white">{weather.temperature}°C</span>
+                  <Cloud className="text-blue-400 sm:w-5 sm:h-5" size={16} />
                 </div>
                 <div className="text-xs text-gray-400">
                   {weather.city}{weather.country && `, ${weather.country}`}
@@ -416,7 +417,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Detailed Statistics with Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Alarm Statistics Chart */}
         <div className="card bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-6">
@@ -464,7 +465,7 @@ export const Dashboard = () => {
         {loadingMetrics && !systemMetrics ? (
           <p className="text-gray-400">Loading...</p>
         ) : systemMetrics ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* CPU */}
             <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
               <div className="flex items-center gap-3 mb-3">

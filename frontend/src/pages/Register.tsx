@@ -219,7 +219,7 @@ export const Register = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4 py-8">
       <div className="max-w-md w-full">
-        <div className="bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-700">
+        <div className="bg-gray-800 rounded-lg shadow-xl p-6 sm:p-8 border border-gray-700">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="flex flex-col items-center mb-6">

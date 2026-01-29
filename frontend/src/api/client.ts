@@ -93,11 +93,18 @@ const createApiClient = (): AxiosInstance => {
       if (error.response) {
         switch (error.response.status) {
           case 401:
-            console.error('Unauthorized access');
-            // Cookie will be cleared by backend on logout
-            // Redirect to login if not already there
-            if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            // Don't redirect if we're already on login/register page or if it's a logout request
+            const isLogoutRequest = error.config?.url?.includes('/auth/logout');
+            const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register';
+            
+            if (!isLogoutRequest && !isAuthPage) {
+              console.error('Unauthorized access');
+              // Cookie will be cleared by backend on logout
+              // Redirect to login if not already there
               window.location.href = '/login';
+            } else if (isLogoutRequest) {
+              // Silently ignore 401 on logout - this is expected behavior
+              console.log('[API Client] 401 on logout request (expected)');
             }
             break;
           case 403:

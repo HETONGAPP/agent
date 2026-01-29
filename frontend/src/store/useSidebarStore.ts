@@ -9,8 +9,11 @@ import { STORAGE_KEYS } from '@/config/constants';
 
 interface SidebarState {
   isCollapsed: boolean;
+  isMobileOpen: boolean;
   toggle: () => void;
   setCollapsed: (collapsed: boolean) => void;
+  openMobile: () => void;
+  closeMobile: () => void;
 }
 
 // Load initial state from localStorage
@@ -24,6 +27,7 @@ const getInitialState = (): boolean => {
 
 export const useSidebarStore = create<SidebarState>((set) => ({
   isCollapsed: getInitialState(),
+  isMobileOpen: false,
   
   toggle: () => {
     set((state) => {
@@ -36,6 +40,14 @@ export const useSidebarStore = create<SidebarState>((set) => ({
   setCollapsed: (collapsed: boolean) => {
     setStorageItem(STORAGE_KEYS.SIDEBAR_STATE, collapsed);
     set({ isCollapsed: collapsed });
+  },
+  
+  openMobile: () => {
+    set({ isMobileOpen: true });
+  },
+  
+  closeMobile: () => {
+    set({ isMobileOpen: false });
   },
 }));
 

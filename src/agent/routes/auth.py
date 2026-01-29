@@ -538,14 +538,16 @@ If you did not request this code, please ignore this email.
         
         # Set HttpOnly cookie with token
         max_age = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
         response.set_cookie(
             key="access_token",
             value=access_token,
             max_age=max_age,
             httponly=True,
-            secure=os.getenv("ENVIRONMENT", "").lower() == "production",  # Secure in production
-            samesite="lax",  # CSRF protection
+            secure=is_production,  # Secure in production (requires HTTPS)
+            samesite="lax",  # CSRF protection - works for same-site and same-origin requests
             path="/",
+            # Don't set domain, let browser handle it automatically for better compatibility
         )
         
         return TokenResponse(
@@ -636,14 +638,16 @@ If you did not request this code, please ignore this email.
         
         # Set HttpOnly cookie with token
         max_age = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
         response.set_cookie(
             key="access_token",
             value=access_token,
             max_age=max_age,
             httponly=True,
-            secure=os.getenv("ENVIRONMENT", "").lower() == "production",  # Secure in production
-            samesite="lax",  # CSRF protection
+            secure=is_production,  # Secure in production (requires HTTPS)
+            samesite="lax",  # CSRF protection - works for same-site and same-origin requests
             path="/",
+            # Don't set domain, let browser handle it automatically for better compatibility
         )
         
         return TokenResponse(

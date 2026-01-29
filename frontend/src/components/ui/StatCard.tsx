@@ -28,11 +28,11 @@ export const StatCard = ({
   onClick,
 }: StatCardProps) => {
   const colorClasses = {
-    blue: 'border-blue-500/50 bg-blue-500/10',
-    green: 'border-green-500/50 bg-green-500/10',
-    red: 'border-red-500/50 bg-red-500/10',
-    yellow: 'border-yellow-500/50 bg-yellow-500/10',
-    purple: 'border-purple-500/50 bg-purple-500/10',
+    blue: 'border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent',
+    green: 'border-green-500/30 bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent',
+    red: 'border-red-500/30 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent',
+    yellow: 'border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 via-yellow-500/5 to-transparent',
+    purple: 'border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent',
   };
 
   const iconColorClasses = {
@@ -41,6 +41,14 @@ export const StatCard = ({
     red: 'text-red-400',
     yellow: 'text-yellow-400',
     purple: 'text-purple-400',
+  };
+
+  const iconBgClasses = {
+    blue: 'bg-blue-500/20',
+    green: 'bg-green-500/20',
+    red: 'bg-red-500/20',
+    yellow: 'bg-yellow-500/20',
+    purple: 'bg-purple-500/20',
   };
 
   // Render icon component
@@ -82,31 +90,44 @@ export const StatCard = ({
 
   return (
     <motion.div
-      className={`card card-hover border-2 ${colorClasses[color]} ${onClick ? 'cursor-pointer' : ''} backdrop-blur-sm`}
-      whileHover={{ scale: 1.02, y: -2 }}
+      className={`card card-hover border ${colorClasses[color]} ${onClick ? 'cursor-pointer' : ''} backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl relative overflow-hidden`}
+      whileHover={{ scale: 1.03, y: -4 }}
       onClick={onClick}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.4, type: "spring", stiffness: 100 }}
     >
-      <div className="flex items-center justify-between">
+      {/* Decorative gradient overlay */}
+      <div className={`absolute top-0 right-0 w-32 h-32 ${iconBgClasses[color]} rounded-full blur-3xl opacity-30 -z-0`} />
+      
+      <div className="flex items-center justify-between relative z-10">
         <div className="flex-1">
-          <p className="text-sm text-gray-400 mb-2 font-medium">{title}</p>
-          <p className="text-3xl font-bold text-white mb-1">{value}</p>
+          <p className="text-sm text-gray-400 mb-2 font-medium uppercase tracking-wide">{title}</p>
+          <p className="text-3xl font-bold text-white mb-1 bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+            {value}
+          </p>
           {trend && (
-            <p
-              className={`text-xs mt-2 font-medium ${
+            <motion.p
+              className={`text-xs mt-2 font-semibold inline-flex items-center gap-1 ${
                 trend.isPositive ? 'text-green-400' : 'text-red-400'
               }`}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
             >
-              {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
-            </p>
+              <span>{trend.isPositive ? '↑' : '↓'}</span>
+              <span>{Math.abs(trend.value)}%</span>
+            </motion.p>
           )}
         </div>
         {icon && (
-          <div className={isLucideIcon ? iconColorClasses[color] : 'opacity-60'}>
+          <motion.div
+            className={`${isLucideIcon ? iconColorClasses[color] : 'opacity-60'} p-3 rounded-xl ${iconBgClasses[color]} backdrop-blur-sm`}
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            transition={{ type: "spring", stiffness: 400 }}
+          >
             {renderIcon()}
-          </div>
+          </motion.div>
         )}
       </div>
     </motion.div>

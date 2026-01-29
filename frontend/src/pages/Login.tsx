@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/Button';
 import { useToastStore } from '@/store/useToastStore';
 import { useSiteDiagnosticStore } from '@/store/useSiteDiagnosticStore';
+import logoIcon from '@/assets/icon.svg';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -55,8 +56,15 @@ export const Login = () => {
         <div className="bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-700">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Login</h1>
-            <p className="text-gray-400">Welcome back</p>
+            <div className="flex flex-col items-center mb-6">
+              <img 
+                src={logoIcon} 
+                alt="BESS Agent Logo" 
+                className="h-20 w-auto mb-4" 
+              />
+              <h1 className="text-3xl font-bold text-white mb-2">Login</h1>
+              <p className="text-gray-400">Welcome back</p>
+            </div>
           </div>
 
           {/* Error Message */}

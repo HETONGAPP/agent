@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/Button';
 import { useToastStore } from '@/store/useToastStore';
 import { sendVerificationCode, verifyCode } from '@/api/auth';
+import logoIcon from '@/assets/icon.svg';
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -221,14 +222,21 @@ export const Register = () => {
         <div className="bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-700">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Register</h1>
-            <p className="text-gray-400">
-              {step === 1 ? 'Step 1: Verify your email' : 'Step 2: Create your account'}
-            </p>
-            {/* Progress indicator */}
-            <div className="mt-4 flex items-center justify-center gap-2">
-              <div className={`h-2 w-12 rounded-full ${step >= 1 ? 'bg-blue-500' : 'bg-gray-600'}`} />
-              <div className={`h-2 w-12 rounded-full ${step >= 2 ? 'bg-blue-500' : 'bg-gray-600'}`} />
+            <div className="flex flex-col items-center mb-6">
+              <img 
+                src={logoIcon} 
+                alt="BESS Agent Logo" 
+                className="h-20 w-auto mb-4" 
+              />
+              <h1 className="text-3xl font-bold text-white mb-2">Register</h1>
+              <p className="text-gray-400 mb-3">
+                {step === 1 ? 'Step 1: Verify your email' : 'Step 2: Create your account'}
+              </p>
+              {/* Progress indicator */}
+              <div className="flex items-center justify-center gap-2">
+                <div className={`h-2 w-12 rounded-full ${step >= 1 ? 'bg-blue-500' : 'bg-gray-600'}`} />
+                <div className={`h-2 w-12 rounded-full ${step >= 2 ? 'bg-blue-500' : 'bg-gray-600'}`} />
+              </div>
             </div>
           </div>
 

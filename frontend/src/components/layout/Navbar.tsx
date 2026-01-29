@@ -3,10 +3,11 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useToastStore } from '@/store/useToastStore';
 import { LogOut, User, ChevronDown } from 'lucide-react';
+import logoIcon from '@/assets/web.svg';
 
 export const Navbar = () => {
   const navigate = useNavigate();
@@ -45,9 +46,19 @@ export const Navbar = () => {
   return (
     <nav className="bg-gray-800 border-b border-gray-700 px-6 py-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">
-          BESS Alarm Diagnostic Agent
-        </h1>
+        <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group">
+          <img 
+            src={logoIcon} 
+            alt="BESS Agent Logo" 
+            className="h-10 w-auto transition-transform group-hover:scale-105" 
+          />
+          <div className="flex flex-col">
+            <h1 className="text-base font-semibold text-white leading-tight">
+              Easy Grid | BESS Diagnostic Agent
+            </h1>
+            <p className="text-xs text-gray-400 leading-tight">Energy Storage System</p>
+          </div>
+        </Link>
         <div className="flex items-center gap-4">
           {user && (
             <div className="relative" ref={menuRef}>

@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { StatusIndicator } from '@/components/ui/StatusIndicator';
 import { Device, DeviceFilters } from '@/types';
-import { DEVICE_TYPES, DEVICE_STATUS } from '@/config/constants';
+import { DEVICE_TYPES, DEVICE_STATUS, REFRESH_INTERVALS, REFRESH_DEBOUNCE_MS } from '@/config/constants';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/date';
 import { formatDeviceId } from '@/utils/format';
 import { useToastStore } from '@/store/useToastStore';
@@ -101,7 +101,7 @@ export const DeviceManagement = () => {
         deviceRefreshTimer = setTimeout(() => {
           fetchDevices(filters);
           fetchStats();
-        }, 500); // 500ms debounce
+        }, REFRESH_DEBOUNCE_MS);
       } else {
         // No specific device, just refresh stats
         fetchStats();
@@ -165,7 +165,7 @@ export const DeviceManagement = () => {
         }
         deviceRefreshTimer = setTimeout(() => {
           fetchDevices(filters);
-        }, 500);
+        }, REFRESH_DEBOUNCE_MS);
       }
     });
 
@@ -183,8 +183,8 @@ export const DeviceManagement = () => {
 
   // Fallback polling (only if WebSocket is not connected)
   useRealtime({
-    enabled: !connected, // Only use polling if WebSocket is not connected
-    interval: 30000, // 30 seconds
+    enabled: !connected,
+    interval: REFRESH_INTERVALS.DEVICE_FALLBACK,
     onUpdate: () => {
       if (!loading) {
         fetchDevices(filters);

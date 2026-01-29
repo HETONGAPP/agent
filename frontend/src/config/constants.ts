@@ -100,13 +100,27 @@ export const PAGINATION = {
   PAGE_SIZE_OPTIONS: [10, 20, 50, 100],
 } as const;
 
-// Refresh Intervals (in milliseconds)
+// Refresh Intervals (in milliseconds) - single source of truth for polling
 export const REFRESH_INTERVALS = {
-  REAL_TIME: 5000,      // 5 seconds
-  FAST: 10000,          // 10 seconds
-  NORMAL: 30000,        // 30 seconds
-  SLOW: 60000,          // 1 minute
+  REAL_TIME: 5000,      // 5 seconds - e.g. diagnostic status while generating
+  FAST: 10000,          // 10 seconds - system metrics, min global throttle
+  NORMAL: 30000,        // 30 seconds - dashboard/device fallback
+  SLOW: 60000,          // 60 seconds - diagnostics list, reports
+  ALARM_FALLBACK: 60000,   // 60 seconds - alarm list when WebSocket disconnected (was 120s)
+  SITE_LIST_WS: 30000,     // 30 seconds - site list when WebSocket connected
+  SITE_LIST_POLL: 20000,   // 20 seconds - site list when WebSocket disconnected
+  DASHBOARD_FALLBACK: 30000,   // 30 seconds - dashboard stats when WS disconnected
+  DASHBOARD_DIAG_LIST: 60000,  // 60 seconds - diagnostics list backup poll
+  DEVICE_FALLBACK: 30000,     // 30 seconds - device list when WS disconnected
+  DIAG_REPORTS: 60000,       // 60 seconds - diagnostic reports page
+  SITE_REPORTS_FALLBACK: 60000, // 60 seconds - site reports tab when WS disconnected
 } as const;
+
+/** Minimum interval between any polling (global throttle) - ms */
+export const POLLING_MIN_INTERVAL_MS = 10000;
+
+/** Debounce delay for WebSocket-triggered refresh - ms */
+export const REFRESH_DEBOUNCE_MS = 500;
 
 // Local Storage Keys
 export const STORAGE_KEYS = {

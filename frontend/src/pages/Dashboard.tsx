@@ -17,6 +17,7 @@ import { formatNumber } from '@/utils/format';
 import { Plug, Bell, FileText, AlertTriangle, Cpu, HardDrive, Network, Cloud } from 'lucide-react';
 import { getSystemMetrics, type SystemMetrics } from '@/api/metrics';
 import { getWeather, type WeatherData } from '@/api/weather';
+import { REFRESH_INTERVALS } from '@/config/constants';
 
 export const Dashboard = () => {
   const { stats: deviceStats, fetchStats: fetchDeviceStats } = useDevices(false);
@@ -231,45 +232,41 @@ export const Dashboard = () => {
   }, [connected, fetchDiagnosticStats, fetchAlarmStats, fetchDeviceStats, fetchDiagnostics]);
 
   // Fallback polling (only when WebSocket is not connected)
-  // All hooks must be called before any conditional returns
   useRealtime({
     enabled: !connected,
-    interval: 30000, // 30 seconds - more frequent for better real-time feel
+    interval: REFRESH_INTERVALS.DASHBOARD_FALLBACK,
     onUpdate: () => {
       fetchDeviceStats();
       fetchAlarmStats();
       fetchDiagnosticStats();
-      // Also refresh diagnostics list for real-time distribution
       fetchDiagnostics(undefined, 1000, 0);
     },
   });
-  
-  // Additional polling for diagnostics list even when WebSocket is connected
-  // This ensures the list stays up-to-date even if WebSocket events are missed
+
+  // Backup polling for diagnostics list (even when WebSocket connected)
   useRealtime({
-    enabled: true, // Always enabled for diagnostics list
-    interval: 60000, // 60 seconds - less frequent to avoid overload
+    enabled: true,
+    interval: REFRESH_INTERVALS.DASHBOARD_DIAG_LIST,
     onUpdate: () => {
       if (!loadingDiagnostics) {
-        // Silently refresh diagnostics list to keep it current
         fetchDiagnostics(undefined, 1000, 0, true);
       }
     },
   });
 
-  // Real-time system metrics update (every 10 seconds)
+  // System metrics update
   useRealtime({
     enabled: true,
-    interval: 10000, // 10 seconds
+    interval: REFRESH_INTERVALS.FAST,
     onUpdate: () => {
       fetchSystemMetrics();
     },
   });
 
-  // Weather update (every 30 minutes)
+  // Weather update (30 minutes)
   useRealtime({
     enabled: true,
-    interval: 1800000, // 30 minutes
+    interval: 30 * 60 * 1000,
     onUpdate: () => {
       fetchWeather();
     },

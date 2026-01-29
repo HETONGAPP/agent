@@ -1,38 +1,62 @@
 /**
  * Real-time Updates Hook
- * Handles real-time data updates using polling with rate limiting
+ * Handles real-time data updates using polling with rate limiting.
+ * Pauses polling when tab is hidden (visibility API) to save resources.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { appConfig } from '@/config/app.config';
-import { REFRESH_INTERVALS } from '@/config/constants';
+import { REFRESH_INTERVALS, POLLING_MIN_INTERVAL_MS } from '@/config/constants';
 
 interface UseRealtimeOptions {
   enabled?: boolean;
   interval?: number;
   onUpdate?: () => void;
+  /** If true, pause polling when document is hidden (default: true) */
+  pauseWhenHidden?: boolean;
 }
 
 // Global rate limit state to prevent multiple intervals
 const globalRateLimit = {
   lastUpdate: 0,
-  minInterval: 10000, // Minimum 10 seconds between any updates (reduced for better responsiveness)
-  activeIntervals: new Set<string>(), // Track active intervals by page
+  minInterval: POLLING_MIN_INTERVAL_MS,
+  activeIntervals: new Set<string>(),
 };
 
-export const useRealtime = ({ enabled = true, interval, onUpdate }: UseRealtimeOptions = {}) => {
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+export const useRealtime = ({
+  enabled = true,
+  interval,
+  onUpdate,
+  pauseWhenHidden = true,
+}: UseRealtimeOptions = {}) => {
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onUpdateRef = useRef(onUpdate);
   const intervalIdRef = useRef<string | null>(null);
-  const updateInterval = Math.max(interval || REFRESH_INTERVALS.NORMAL, 10000); // Minimum 10 seconds
+  const updateInterval = Math.max(interval ?? REFRESH_INTERVALS.NORMAL, POLLING_MIN_INTERVAL_MS);
+  const [isVisible, setIsVisible] = useState(
+    () => (typeof document !== 'undefined' ? !document.hidden : true)
+  );
 
-  // Keep onUpdate ref up to date
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   }, [onUpdate]);
 
+  // Pause polling when tab is hidden to save CPU and network
   useEffect(() => {
-    if (!enabled || !appConfig.features.realTimeUpdates || !onUpdateRef.current) {
+    if (!pauseWhenHidden || typeof document === 'undefined') return;
+    const handleVisibility = () => setIsVisible(!document.hidden);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [pauseWhenHidden]);
+
+  useEffect(() => {
+    const shouldPoll =
+      enabled &&
+      appConfig.features.realTimeUpdates &&
+      onUpdateRef.current &&
+      (!pauseWhenHidden || isVisible);
+
+    if (!shouldPoll) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -44,37 +68,21 @@ export const useRealtime = ({ enabled = true, interval, onUpdate }: UseRealtimeO
       return;
     }
 
-    // Generate unique ID for this interval
     const intervalId = `realtime-${Date.now()}-${Math.random()}`;
     intervalIdRef.current = intervalId;
 
-    // Throttled update function
     const throttledUpdate = () => {
       const now = Date.now();
-      const timeSinceLastUpdate = now - globalRateLimit.lastUpdate;
-      
-      if (timeSinceLastUpdate < globalRateLimit.minInterval) {
-        // Skip this update if too soon
-        return;
-      }
-
+      if (now - globalRateLimit.lastUpdate < globalRateLimit.minInterval) return;
       globalRateLimit.lastUpdate = now;
-      if (onUpdateRef.current) {
-        onUpdateRef.current();
-      }
+      onUpdateRef.current?.();
     };
 
-    // Initial update (skip if too soon)
-    const now = Date.now();
-    if (now - globalRateLimit.lastUpdate >= globalRateLimit.minInterval) {
+    if (Date.now() - globalRateLimit.lastUpdate >= globalRateLimit.minInterval) {
       throttledUpdate();
     }
 
-    // Set up polling with throttling
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    
+    if (intervalRef.current) clearInterval(intervalRef.current);
     globalRateLimit.activeIntervals.add(intervalId);
     intervalRef.current = setInterval(throttledUpdate, updateInterval);
 
@@ -88,6 +96,6 @@ export const useRealtime = ({ enabled = true, interval, onUpdate }: UseRealtimeO
         intervalIdRef.current = null;
       }
     };
-  }, [enabled, updateInterval]);
+  }, [enabled, updateInterval, pauseWhenHidden, isVisible]);
 };
 

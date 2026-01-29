@@ -21,6 +21,7 @@ import { DiagnosticDeleteModal } from '@/components/diagnostics/DiagnosticDelete
 import { Modal } from '@/components/ui/Modal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useSiteDiagnosticStore } from '@/store/useSiteDiagnosticStore';
+import { REFRESH_INTERVALS } from '@/config/constants';
 
 interface SiteReportsTabProps {
   siteId: string;
@@ -141,7 +142,7 @@ export const SiteReportsTab = ({ siteId }: SiteReportsTabProps) => {
   // Real-time updates (fallback polling when WebSocket is not connected)
   useRealtime({
     enabled: true && !loading && !connected,
-    interval: 60000, // 60 seconds
+    interval: REFRESH_INTERVALS.SITE_REPORTS_FALLBACK,
     onUpdate: () => {
       if (!loading) {
         fetchDiagnostics(filters, 15, pagination.offset, true);

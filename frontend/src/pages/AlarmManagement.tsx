@@ -16,7 +16,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Alarm, AlarmFilters } from '@/types';
-import { ALARM_SEVERITY } from '@/config/constants';
+import { ALARM_SEVERITY, REFRESH_INTERVALS, REFRESH_DEBOUNCE_MS } from '@/config/constants';
 import { formatRelativeTime } from '@/utils/date';
 import { useToastStore } from '@/store/useToastStore';
 import { Link } from 'react-router-dom';
@@ -102,7 +102,7 @@ export const AlarmManagement = () => {
       refreshTimeout = setTimeout(() => {
         fetchAlarms(filters, pagination.limit, pagination.offset, true);
         fetchStats();
-      }, 500); // Debounce 500ms
+      }, REFRESH_DEBOUNCE_MS);
     };
     
     const unsubscribeAlarmCreated = websocketEventManager.subscribe(EventType.ALARM_CREATED, debouncedRefresh);
@@ -139,10 +139,9 @@ export const AlarmManagement = () => {
   }, []);
 
   // Fallback polling (only when WebSocket is not connected)
-  // Use longer interval for site summary view to reduce load
   useRealtime({
-    enabled: !connected && !loading, // Only poll when WebSocket is disconnected
-    interval: 120000, // 120 seconds for site summary
+    enabled: !connected && !loading,
+    interval: REFRESH_INTERVALS.ALARM_FALLBACK,
     onUpdate: () => {
       if (!loading && !connected) {
         // Use localFilters which includes all active filters

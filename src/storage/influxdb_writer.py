@@ -66,6 +66,44 @@ class InfluxDBWriter:
             return point.tag("site_id", metadata["site_id"])
         
         return point
+    
+    def _ensure_bucket_exists(self, bucket_name: str) -> bool:
+        """
+        Ensure bucket exists, create if it doesn't
+        
+        Args:
+            bucket_name: Bucket name to check/create
+            
+        Returns:
+            True if bucket exists or was created successfully, False otherwise
+        """
+        try:
+            buckets_api = self.client.client.buckets_api()
+            buckets = buckets_api.find_buckets()
+            bucket_list = buckets.buckets if hasattr(buckets, "buckets") else (buckets if isinstance(buckets, list) else list(buckets))
+            
+            # Check if bucket exists
+            if any(b.name == bucket_name for b in bucket_list):
+                return True
+            
+            # Create bucket if it doesn't exist
+            from influxdb_client.domain.bucket import Bucket
+            from influxdb_client.domain.bucket_retention_rules import BucketRetentionRules
+            
+            orgs_api = self.client.client.organizations_api()
+            orgs = orgs_api.find_organizations()
+            org_list = orgs.orgs if hasattr(orgs, "orgs") else (orgs if isinstance(orgs, list) else list(orgs))
+            org_id = next((o.id for o in org_list if o.name == self.org), self.org)
+            
+            from ..storage.optimization_config import OptimizationConfig
+            retention_seconds = OptimizationConfig.RAW_DATA_RETENTION_DAYS * 86400
+            retention_rules = BucketRetentionRules(type="expire", every_seconds=retention_seconds)
+            buckets_api.create_bucket(bucket=Bucket(name=bucket_name, org_id=org_id, retention_rules=[retention_rules]))
+            logger.info(f"Created bucket {bucket_name} for site alarm storage")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to ensure bucket {bucket_name} exists: {e}")
+            return False
 
     def write_alarm(
         self, alarm: Alarm, flush: bool = False, site_id: Optional[str] = None
@@ -79,6 +117,17 @@ class InfluxDBWriter:
             flush: If True, immediately flush buffer (default: False, batch write)
             site_id: Optional site ID for multi-site support
         """
+        # Determine the bucket to use
+        # If site_id is provided and bucket is not already site-specific, use site bucket
+        target_bucket = self.bucket
+        if site_id and not self.bucket.startswith(f"site_{site_id}"):
+            # Check if we should use site-specific bucket
+            # If the current bucket is the default "alarms" bucket, use site bucket
+            if self.bucket == "alarms" or not self.bucket.startswith("site_"):
+                target_bucket = f"site_{site_id}"
+                # Ensure site bucket exists
+                self._ensure_bucket_exists(target_bucket)
+        
         # Delete old alarms of the same type before writing new one
         if INFLUXDB_AVAILABLE:
             try:
@@ -110,11 +159,9 @@ class InfluxDBWriter:
                         start=start_time,
                         stop=stop_time,
                         predicate=predicate,
-                        bucket=self.bucket,
+                        bucket=target_bucket,
                         org=self.org
                     )
-                    logger.debug(f"Deleted old alarm(s) of type {alarm.alarm_type} "
-                               f"{f'for device {device_id}' if device_id else ''} before writing new snapshot")
                 except Exception as e:
                     logger.warning(f"Failed to delete old alarms before writing new one: {e}")
             except Exception as e:
@@ -151,10 +198,10 @@ class InfluxDBWriter:
         if self.use_async:
             self._write_buffer.append(point)
             if len(self._write_buffer) >= self.batch_size or flush:
-                self.write_api.write(bucket=self.bucket, record=self._write_buffer)
+                self.write_api.write(bucket=target_bucket, record=self._write_buffer)
                 self._write_buffer = []
         else:
-            self.write_api.write(bucket=self.bucket, record=point)
+            self.write_api.write(bucket=target_bucket, record=point)
 
     def write_bms_data(self, bms_data: BMSData, site_id: Optional[str] = None):
         """

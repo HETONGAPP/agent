@@ -24,6 +24,7 @@ import { DiagnosticOutput } from '@/components/diagnostics/DiagnosticOutput';
 import { DiagnosticDeleteModal } from '@/components/diagnostics/DiagnosticDeleteModal';
 import { Modal } from '@/components/ui/Modal';
 import { PageLoading } from '@/components/ui/PageLoading';
+import { REFRESH_INTERVALS } from '@/config/constants';
 
 export const DiagnosticReports = () => {
   const location = useLocation();
@@ -107,24 +108,21 @@ export const DiagnosticReports = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Real-time updates for diagnostics list (only when not loading, with longer interval)
+  // Real-time updates for diagnostics list
   useRealtime({
     enabled: true && !loading,
-    interval: 60000, // 60 seconds to avoid rate limiting
+    interval: REFRESH_INTERVALS.DIAG_REPORTS,
     onUpdate: () => {
       if (!loading) {
-        // Use silent mode to prevent UI flashing - keeps table visible during update
-        // Only fetch diagnostics list, stats will be updated separately with longer interval
-        // This prevents double updates that cause UI stuttering
         fetchDiagnostics(filters, pagination.limit, pagination.offset, true);
       }
     },
   });
 
-  // Fetch stats with 60 second interval and use startTransition to prevent UI blocking
+  // Fetch stats with same interval, use startTransition to prevent UI blocking
   useRealtime({
     enabled: true && !loading,
-    interval: 60000, // 60 seconds
+    interval: REFRESH_INTERVALS.DIAG_REPORTS,
     onUpdate: () => {
       if (!loading) {
         // Use startTransition to mark stats update as non-urgent

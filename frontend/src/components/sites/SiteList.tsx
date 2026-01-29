@@ -13,6 +13,7 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { useRealtime } from '@/hooks/useRealtime';
 import { Badge } from '@/components/ui/Badge';
 import { MapPin, Plug, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { REFRESH_INTERVALS } from '@/config/constants';
 
 interface SiteListProps {
   sites: Site[];
@@ -64,10 +65,9 @@ export const SiteList = ({ sites, onSiteClick }: SiteListProps) => {
   });
 
   // Polling for real-time updates (always enabled as backup)
-  // Limit to first 10 sites to avoid overwhelming the API
   useRealtime({
     enabled: true,
-    interval: connected ? 30000 : 20000, // 30s when WebSocket connected, 20s when not (increased intervals)
+    interval: connected ? REFRESH_INTERVALS.SITE_LIST_WS : REFRESH_INTERVALS.SITE_LIST_POLL,
     onUpdate: () => {
       // Only fetch stats for a limited number of sites if there are many
       const sitesToPoll = sites.slice(0, 10); // Limit to first 10 sites for performance

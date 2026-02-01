@@ -188,8 +188,21 @@ def register_diagnostic_routes(app):
                         diagnostics_map[alarm_id_key] = pg_diag
                         logger.debug(f"Added diagnostic from PostgreSQL only: {alarm_id_key}")
             
-            # Convert map back to list and sort by timestamp (descending)
+            # Convert map back to list
             all_diagnostics = list(diagnostics_map.values())
+            # Apply time filter if start_time/end_time provided (merge can include PG results without time filter)
+            if start_time or end_time:
+                filtered = []
+                for diag in all_diagnostics:
+                    ts = diag.get("generated_at") or diag.get("timestamp") or diag.get("created_at") or ""
+                    if not ts:
+                        continue
+                    if start_time and ts < start_time:
+                        continue
+                    if end_time and ts > end_time:
+                        continue
+                    filtered.append(diag)
+                all_diagnostics = filtered
             all_diagnostics.sort(key=lambda x: (
                 x.get("generated_at") or x.get("timestamp") or x.get("created_at") or ""
             ), reverse=True)

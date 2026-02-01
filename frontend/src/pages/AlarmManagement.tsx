@@ -190,15 +190,28 @@ export const AlarmManagement = () => {
     {
       key: 'site_id',
       header: 'Site ID',
-      render: (siteSummary: any) => (
-        <Link
-          to={`/datacenter/sites/${siteSummary.site_id}`}
-          className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 hover:underline transition-colors"
-        >
-          <MapPin size={14} className="text-gray-400" />
-          <span className="font-mono text-sm font-semibold">{siteSummary.site_id}</span>
-        </Link>
-      ),
+      render: (siteSummary: any) => {
+        const sid = siteSummary.site_id;
+        const isSystem = sid === '_system';
+        const label = siteSummary.site_name || sid;
+        if (isSystem) {
+          return (
+            <span className="flex items-center gap-1.5 text-gray-400">
+              <MapPin size={14} className="text-gray-500" />
+              <span className="font-mono text-sm font-semibold">{label}</span>
+            </span>
+          );
+        }
+        return (
+          <Link
+            to={`/datacenter/sites/${sid}`}
+            className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+          >
+            <MapPin size={14} className="text-gray-400" />
+            <span className="font-mono text-sm font-semibold">{sid}</span>
+          </Link>
+        );
+      },
     },
     {
       key: 'site_name',

@@ -10,6 +10,7 @@ import { useWebSocket, EventType } from '@/hooks/useWebSocket';
 import { websocketEventManager } from '@/services/websocketEventManager';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { FilterBar } from '@/components/ui/FilterBar';
+import { FilterSelect } from '@/components/ui/FilterSelect';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Pagination } from '@/components/ui/Pagination';
@@ -151,26 +152,17 @@ export const AlarmManagement = () => {
     },
   });
 
-  const handleFilterChange = () => {
-    const newFilters: AlarmFilters = {
-      ...filters, // Preserve existing filters (like date range)
-    };
-    if (selectedSeverity) {
-      newFilters.severity = selectedSeverity as any;
-    } else {
-      // Remove severity filter if not selected
-      delete newFilters.severity;
-    }
-    if (selectedSiteId) {
-      newFilters.site_id = selectedSiteId;
-    } else {
-      delete newFilters.site_id;
-    }
-    if (selectedDeviceType) {
-      newFilters.device_type = selectedDeviceType;
-    } else {
-      delete newFilters.device_type;
-    }
+  const applyFilters = (updates: Partial<AlarmFilters> = {}) => {
+    const newFilters: AlarmFilters = { ...filters, ...updates };
+    if (updates.severity !== undefined) newFilters.severity = updates.severity as any;
+    else if (selectedSeverity) newFilters.severity = selectedSeverity as any;
+    else delete newFilters.severity;
+    if (updates.site_id !== undefined) newFilters.site_id = updates.site_id || undefined;
+    else if (selectedSiteId) newFilters.site_id = selectedSiteId;
+    else delete newFilters.site_id;
+    if (updates.device_type !== undefined) newFilters.device_type = updates.device_type || undefined;
+    else if (selectedDeviceType) newFilters.device_type = selectedDeviceType;
+    else delete newFilters.device_type;
     setLocalFilters(newFilters);
     setFilters(newFilters);
     fetchAlarms(newFilters, pagination.limit, 0, true);
@@ -395,116 +387,64 @@ export const AlarmManagement = () => {
       )}
 
       {/* Search and Filters */}
-      <FilterBar 
+      <FilterBar
         onClear={handleClearFilters}
         searchComponent={
-          <SearchInput
-            placeholder="Search alarms by ID, type, or source..."
-            onSearch={handleSearch}
-          />
+          <SearchInput placeholder="Search alarms..." onSearch={handleSearch} />
         }
       >
-          {/* Filter Group - Hidden on mobile */}
-          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Filters</span>
-            <div className="h-4 w-px bg-gray-700"></div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Severity</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[140px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedSeverity}
-                onChange={(e) => setSelectedSeverity(e.target.value)}
-              >
-                <option value="">All</option>
-                {Object.values(ALARM_SEVERITY).map((severity) => (
-                  <option key={severity} value={severity}>
-                    {severity}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="h-4 w-px bg-gray-700"></div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Site</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[160px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedSiteId}
-                onChange={(e) => setSelectedSiteId(e.target.value)}
-              >
-                <option value="">All Sites</option>
-                {sites.map((site) => (
-                  <option key={site.site_id} value={site.site_id}>
-                    {site.site_name || site.site_id}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="h-4 w-px bg-gray-700"></div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Device Type</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[140px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedDeviceType}
-                onChange={(e) => setSelectedDeviceType(e.target.value)}
-              >
-                <option value="">All Types</option>
-                {Object.values(DEVICE_TYPES).map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Date Range Group - Hidden on mobile */}
-          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Date</span>
-            <div className="h-4 w-px bg-gray-700"></div>
-            <div className="flex items-center gap-2">
-              <DateRangePicker
-            onRangeChange={(start, end) => {
-              const newFilters: AlarmFilters = {
-                ...filters, // Preserve existing filters
-                start_time: start || undefined,
-                end_time: end || undefined,
-              };
-              // Preserve all filters if selected
-              if (selectedSeverity) {
-                newFilters.severity = selectedSeverity as any;
-              } else {
-                delete newFilters.severity;
-              }
-              if (selectedSiteId) {
-                newFilters.site_id = selectedSiteId;
-              } else {
-                delete newFilters.site_id;
-              }
-              if (selectedDeviceType) {
-                newFilters.device_type = selectedDeviceType;
-              } else {
-                delete newFilters.device_type;
-              }
-              setLocalFilters(newFilters);
-              setFilters(newFilters);
-              fetchAlarms(newFilters, pagination.limit, 0, true);
-              setPagination(pagination.limit, 0);
+        <div className="hidden sm:flex items-center gap-x-4 gap-y-2 flex-wrap">
+          <FilterSelect
+            label="Severity"
+            value={selectedSeverity}
+            onChange={(v) => {
+              setSelectedSeverity(v);
+              applyFilters({ severity: v as any });
             }}
+            options={Object.values(ALARM_SEVERITY).map((s) => ({ value: s, label: s }))}
+            placeholder="All"
+          />
+          <FilterSelect
+            label="Site"
+            value={selectedSiteId}
+            onChange={(v) => {
+              setSelectedSiteId(v);
+              applyFilters({ site_id: v || undefined });
+            }}
+            options={sites.map((s) => ({ value: s.site_id, label: s.site_name || s.site_id }))}
+            placeholder="All sites"
+          />
+          <FilterSelect
+            label="Device"
+            value={selectedDeviceType}
+            onChange={(v) => {
+              setSelectedDeviceType(v);
+              applyFilters({ device_type: v || undefined });
+            }}
+            options={Object.values(DEVICE_TYPES).map((t) => ({ value: t, label: t }))}
+            placeholder="All types"
+          />
+          <div className="flex items-center gap-2 shrink-0">
+            <DateRangePicker
+              label="Date"
+              onRangeChange={(start, end) => {
+                const next: AlarmFilters = {
+                  ...filters,
+                  start_time: start || undefined,
+                  end_time: end || undefined,
+                };
+                if (selectedSeverity) next.severity = selectedSeverity as any;
+                if (selectedSiteId) next.site_id = selectedSiteId;
+                if (selectedDeviceType) next.device_type = selectedDeviceType;
+                setLocalFilters(next);
+                setFilters(next);
+                fetchAlarms(next, pagination.limit, 0, true);
+                setPagination(pagination.limit, 0);
+              }}
             />
-            </div>
           </div>
-
-          <div className="hidden sm:flex items-center gap-2 ml-auto">
-            <Button variant="primary" size="sm" onClick={handleFilterChange}>
-              Apply Filters
-            </Button>
-          </div>
-        </FilterBar>
+        </div>
+      </FilterBar>
 
       {/* Error Message */}
       {error && (

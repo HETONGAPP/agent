@@ -94,6 +94,10 @@ def enrich_site_info(summaries: list, site_manager: Optional[SiteManager]) -> li
             continue
         
         site_id_str = str(site_id)
+        if site_id_str == "_system":
+            summary["site_name"] = "System"
+            summary["location"] = ""
+            continue
         try:
             site_info = site_manager.get_site(site_id_str)
             if site_info:
@@ -192,6 +196,7 @@ def register_alarm_routes(app):
                         # Merge site_ids and containers, remove duplicates
                         all_site_ids = list(dict.fromkeys([str(sid) for sid in site_ids + all_containers if sid]))
                         site_summaries = []
+                        _run_fetch_all_aggregate = False
                         
                         def query_container_alarm_summary(container_site_id: str):
                             try:
@@ -200,7 +205,7 @@ def register_alarm_routes(app):
                                     return None
                                 
                                 alarms = container.query_alarms(
-                                    start_time=start_time or "-24h",
+                                    start_time=start_time,
                                     end_time=end_time,
                                     alarm_type=alarm_type,
                                     severity=severity,
@@ -248,7 +253,6 @@ def register_alarm_routes(app):
                         # Execute queries in parallel (only if there are site_ids)
                         if all_site_ids:
                             max_workers = min(5, len(all_site_ids))
-                            # Ensure max_workers is at least 1
                             max_workers = max(1, max_workers)
                             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                                 futures = {executor.submit(query_container_alarm_summary, sid): sid for sid in all_site_ids}
@@ -263,8 +267,110 @@ def register_alarm_routes(app):
                                     except Exception as e:
                                         site_id = futures[future]
                                         logger.warning(f"Failed to query alarm summary from site {site_id}: {e}")
+                            # If per-site queries returned nothing, fall back to fetch-all then aggregate
+                            if not site_summaries:
+                                logger.debug("No summaries from per-site queries; fetching all alarms and aggregating by site")
+                                _run_fetch_all_aggregate = True
+                            else:
+                                _run_fetch_all_aggregate = False
                         else:
-                            logger.debug("No sites found for alarm aggregation")
+                            # Fallback: no site list available — fetch all alarms then aggregate by site_id
+                            logger.debug("No site list for aggregation; fetching all alarms and aggregating by site")
+                            _run_fetch_all_aggregate = True
+                        if _run_fetch_all_aggregate:
+                            all_alarms_fallback = []
+                            if all_containers:
+                                def _query_container(sid: str):
+                                    try:
+                                        c = agent_service.container_manager.get_container(sid, auto_create=False)
+                                        return c.query_alarms(
+                                            start_time=start_time,
+                                            end_time=end_time,
+                                            alarm_type=alarm_type,
+                                            severity=severity,
+                                            device_type=device_type,
+                                            limit=10000,
+                                        ) if c else []
+                                    except Exception as e:
+                                        logger.warning(f"Failed to query alarms from container {sid}: {e}")
+                                        return []
+                                with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(all_containers))) as executor:
+                                    for future in concurrent.futures.as_completed(
+                                        {executor.submit(_query_container, cid): cid for cid in all_containers}
+                                    ):
+                                        try:
+                                            result = future.result()
+                                            if isinstance(result, list):
+                                                all_alarms_fallback.extend(result)
+                                        except Exception as e:
+                                            logger.warning(f"Fallback alarm query failed: {e}")
+                            if not all_alarms_fallback and influx_client:
+                                # Try default bucket first
+                                all_alarms_fallback = influx_client.query_alarms(
+                                    start_time=start_time,
+                                    end_time=end_time,
+                                    alarm_type=alarm_type,
+                                    severity=severity,
+                                    site_id=None,
+                                    device_type=device_type,
+                                    limit=10000,
+                                )
+                                # If empty and we have site ids, alarms may be in per-site buckets
+                                if not all_alarms_fallback and all_site_ids:
+                                    for sid in all_site_ids:
+                                        try:
+                                            site_alarms = influx_client.query_alarms(
+                                                start_time=start_time,
+                                                end_time=end_time,
+                                                alarm_type=alarm_type,
+                                                severity=severity,
+                                                site_id=sid,
+                                                device_type=device_type,
+                                                limit=10000,
+                                            )
+                                            if site_alarms:
+                                                all_alarms_fallback.extend(site_alarms)
+                                        except Exception as e:
+                                            logger.warning(f"Failed to query alarms for site {sid}: {e}")
+                            # Group by site_id and build site summary per site (include alarms without site_id as "System")
+                            by_site = defaultdict(list)
+                            for a in all_alarms_fallback:
+                                sid = (a.get("site_id") or "").strip()
+                                if not sid:
+                                    sid = "_system"
+                                by_site[sid].append(a)
+                            for sid, site_alarms in by_site.items():
+                                if not site_alarms:
+                                    continue
+                                severity_counts = defaultdict(int)
+                                all_sevs = []
+                                for a in site_alarms:
+                                    sev = normalize_severity(a.get("severity", "Unknown"))
+                                    severity_counts[sev] += 1
+                                    all_sevs.append(sev)
+                                highest_severity = "Info"
+                                best_pri = 0
+                                for sev in all_sevs:
+                                    p = SEVERITY_PRIORITY.get(sev, 0)
+                                    if p > best_pri:
+                                        best_pri = p
+                                        highest_severity = sev
+                                latest_ts = max((a.get("timestamp", "") for a in site_alarms), default="")
+                                summary_entry = {
+                                    "alarm_id": f"site_{sid}_summary",
+                                    "alarm_type": f"Site Alarm Summary ({len(site_alarms)} alarms)",
+                                    "severity": highest_severity,
+                                    "source": "System",
+                                    "site_id": sid,
+                                    "timestamp": latest_ts,
+                                    "alarm_level": "site_level",
+                                    "total_alarms": len(site_alarms),
+                                    "by_severity": dict(severity_counts),
+                                }
+                                if sid == "_system":
+                                    summary_entry["site_name"] = "System"
+                                    summary_entry["location"] = ""
+                                site_summaries.append(summary_entry)
                         
                         # Deduplicate
                         site_summaries = deduplicate_site_summaries(site_summaries)
@@ -292,6 +398,47 @@ def register_alarm_routes(app):
                                 final_dict[site_id_str] = summary
                         
                         site_summaries = list(final_dict.values())
+                        # Last resort: if still no rows, try default Influx bucket (stats uses this)
+                        if not site_summaries and influx_client:
+                            try:
+                                default_alarms = influx_client.query_alarms(
+                                    start_time=start_time or "-30d",
+                                    end_time=end_time,
+                                    alarm_type=alarm_type,
+                                    severity=severity,
+                                    site_id=None,
+                                    device_type=device_type,
+                                    limit=10000,
+                                )
+                                if default_alarms:
+                                    severity_counts = defaultdict(int)
+                                    for a in default_alarms:
+                                        sev = normalize_severity(a.get("severity", "Unknown"))
+                                        severity_counts[sev] += 1
+                                    all_sevs = list(severity_counts.keys())
+                                    highest_severity = "Info"
+                                    best_pri = 0
+                                    for sev in all_sevs:
+                                        p = SEVERITY_PRIORITY.get(sev, 0)
+                                        if p > best_pri:
+                                            best_pri = p
+                                            highest_severity = sev
+                                    latest_ts = max((a.get("timestamp", "") for a in default_alarms), default="")
+                                    site_summaries = [{
+                                        "alarm_id": "site__system_summary",
+                                        "alarm_type": f"Site Alarm Summary ({len(default_alarms)} alarms)",
+                                        "severity": highest_severity,
+                                        "source": "System",
+                                        "site_id": "_system",
+                                        "site_name": "System",
+                                        "location": "",
+                                        "timestamp": latest_ts,
+                                        "alarm_level": "site_level",
+                                        "total_alarms": len(default_alarms),
+                                        "by_severity": dict(severity_counts),
+                                    }]
+                            except Exception as e:
+                                logger.warning(f"Last-resort default bucket alarm query failed: {e}")
                         total_count = len(site_summaries)
                         alarms = site_summaries[offset:offset + limit]
                     else:

@@ -15,23 +15,53 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) => {
+// Lock body + layout main scroll when any modal is open (supports multiple modals)
+const MODAL_OPEN_BODY_CLASS = 'modal-open';
+let openModalCount = 0;
+
+function useModalScrollLock(isOpen: boolean) {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
+    if (!isOpen) return;
+    openModalCount += 1;
+    document.body.classList.add(MODAL_OPEN_BODY_CLASS);
+    document.body.style.overflow = 'hidden';
+    const main = document.querySelector('main');
+    if (main instanceof HTMLElement) {
+      main.style.overflow = 'hidden';
+      main.style.touchAction = 'none';
     }
     return () => {
-      document.body.style.overflow = 'unset';
+      openModalCount = Math.max(0, openModalCount - 1);
+      if (openModalCount === 0) {
+        document.body.classList.remove(MODAL_OPEN_BODY_CLASS);
+        document.body.style.overflow = 'unset';
+        const el = document.querySelector('main');
+        if (el instanceof HTMLElement) {
+          el.style.overflow = '';
+          el.style.touchAction = '';
+        }
+      }
     };
   }, [isOpen]);
+}
+
+export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalProps) => {
+  useModalScrollLock(isOpen);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   const sizeClasses = {
-    sm: 'max-w-md',
-    md: 'max-w-lg',
-    lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
+    sm: 'max-w-full sm:max-w-md',
+    md: 'max-w-full sm:max-w-lg',
+    lg: 'max-w-full sm:max-w-2xl',
+    xl: 'max-w-full sm:max-w-4xl',
   };
 
   return (
@@ -48,9 +78,17 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md' }: ModalPr
           />
           
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+              style={{
+                paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
+                paddingRight: 'max(0.5rem, env(safe-area-inset-right))',
+                paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
+                paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+              }}
+            >
             <motion.div
-              className={`bg-gray-800 rounded-lg shadow-2xl w-full ${sizeClasses[size]} max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col`}
+              className={`bg-gray-800 rounded-lg shadow-2xl w-full min-w-0 ${sizeClasses[size]} max-h-[85dvh] sm:max-h-[90vh] overflow-hidden flex flex-col`}
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}

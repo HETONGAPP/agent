@@ -390,7 +390,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
   const availableDeviceTypes = ALL_DEVICE_TYPES;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 min-w-0 max-w-full">
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
           Rule ID <span className="text-red-400">*</span>
@@ -489,7 +489,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
       <div className="border-t border-gray-700 pt-4">
         <h4 className="text-sm font-medium text-gray-300 mb-3">Condition</h4>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Condition Type <span className="text-red-400">*</span>
@@ -581,7 +581,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
             Severity <span className="text-red-400">*</span>
@@ -646,7 +646,7 @@ export const AddRuleForm = ({ siteId, devices, initialRule, onSuccess, onCancel,
         </p>
       </div>
 
-      <div className="flex justify-between items-center pt-4">
+      <div className="flex flex-wrap justify-between items-center gap-3 pt-4">
         {initialRule && onDelete && (
           <Button
             type="button"

@@ -8,7 +8,6 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, LayoutDashboard, Map, Plug, Bell, FileText, Workflow, X } from 'lucide-react';
 import { useSidebarStore } from '@/store/useSidebarStore';
-import { RELEASE } from '@/config/constants';
 
 const navigationItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -91,12 +90,13 @@ export const Sidebar = () => {
       <motion.aside
         className={`relative flex flex-col bg-gradient-to-b from-gray-800 to-gray-900 border-r border-gray-700/50 min-h-screen shadow-xl ${
           isCollapsed ? 'w-16' : 'w-64'
-        } fixed lg:relative z-[60] lg:z-auto`}
+        } fixed lg:relative z-[60] lg:z-auto lg:min-h-0 lg:h-full`}
         style={{ 
           willChange: 'width, transform',
           top: 0,
           left: 0,
           height: isMobile ? '100vh' : '100%',
+          minHeight: isMobile ? undefined : '100%',
           pointerEvents: isMobile && !isMobileOpen ? 'none' : 'auto',
           touchAction: 'pan-y'
         }}
@@ -157,7 +157,7 @@ export const Sidebar = () => {
         </motion.div>
       </motion.button>
 
-      <nav className="flex-1 p-4 pb-14 overflow-y-auto" style={{ pointerEvents: 'auto', zIndex: 1 }}>
+      <nav className="flex-1 p-4 overflow-y-auto" style={{ pointerEvents: 'auto', zIndex: 1 }}>
         <ul className="space-y-2">
           {navigationItems.map((item, index) => {
             const isActive = location.pathname === item.path;
@@ -248,30 +248,6 @@ export const Sidebar = () => {
           })}
         </ul>
       </nav>
-
-      {/* Release version — fixed at bottom of sidebar with absolute so it’s always visible */}
-      <div
-        className={`absolute bottom-0 left-0 right-0 border-t border-gray-600/60 px-4 py-3 flex items-center justify-center ${
-          isCollapsed ? 'px-2' : ''
-        }`}
-        style={{
-          background: 'linear-gradient(180deg, rgba(75,85,99,0.25) 0%, rgba(55,65,81,0.4) 100%)',
-          boxShadow: 'inset 0 1px 0 rgba(148,163,184,0.15)',
-          minHeight: '48px',
-          zIndex: 10,
-        }}
-      >
-        <span
-          className="font-mono text-sm font-semibold tracking-widest select-none"
-          style={{
-            color: 'rgba(226,232,240,0.98)',
-            textShadow: '0 0 1px rgba(255,255,255,0.3), 0 1px 2px rgba(0,0,0,0.4)',
-          }}
-          title={`Release ${RELEASE}`}
-        >
-          {isCollapsed ? `v${RELEASE.split('.').slice(0, 2).join('.')}` : `v${RELEASE}`}
-        </span>
-      </div>
       </motion.aside>
     </>
   );

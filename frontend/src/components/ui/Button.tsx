@@ -37,7 +37,7 @@ export const Button = ({
 
   return (
     <motion.button
-      className={`${variantClasses[variant]} ${sizeClasses[size]} ${className} disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium transition-all duration-200 relative overflow-hidden`}
+      className={`${variantClasses[variant]} ${sizeClasses[size]} ${className} disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium transition-all duration-200 relative overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900`}
       style={{ willChange: 'transform' }}
       disabled={disabled || loading}
       whileHover={disabled || loading ? {} : { scale: 1.02 }}

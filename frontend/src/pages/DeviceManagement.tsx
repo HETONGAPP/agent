@@ -277,6 +277,7 @@ export const DeviceManagement = () => {
     {
       key: 'brand',
       header: 'Brand/Manufacturer',
+      hideOnMobile: true,
       render: (device) => {
         const brand = (device.metadata as any)?.brand || 
                      (device.metadata as any)?.manufacturer ||
@@ -289,6 +290,7 @@ export const DeviceManagement = () => {
     {
       key: 'integration_name',
       header: 'Manufacturing ID',
+      hideOnMobile: true,
       render: (device) => {
         // Try to get manufacturing_id from metadata, fallback to integration_name
         const manufacturingId = (device.metadata as any)?.manufacturing_id || 
@@ -302,6 +304,7 @@ export const DeviceManagement = () => {
     {
       key: 'registered_at',
       header: 'Registration Time',
+      hideOnMobile: true,
       render: (device) => (
         <span className="text-gray-300 text-sm">
           {device.registered_at ? formatAbsoluteTime(device.registered_at) : 'N/A'}
@@ -316,7 +319,7 @@ export const DeviceManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <div>
@@ -344,7 +347,7 @@ export const DeviceManagement = () => {
 
       {/* Statistics */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div className="card">
             <div className="text-sm text-gray-400">Total Devices</div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>

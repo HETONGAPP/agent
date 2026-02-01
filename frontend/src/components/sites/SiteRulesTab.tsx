@@ -390,6 +390,7 @@ export const SiteRulesTab = ({
       key: 'rule_unit',
       header: 'Unit',
       width: '8%',
+      hideOnMobile: true,
       render: (row) => {
         const unit = getUnit(row);
         
@@ -521,20 +522,22 @@ export const SiteRulesTab = ({
   }, [allRulesTableData, deviceRules]);
   
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-700/50">
-        <div className="flex items-center gap-3">
-          <AlertCircle className="text-yellow-400" size={20} />
-          <h3 className="text-xl font-semibold text-white">Rules</h3>
+    <div className="card w-full max-w-full min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-4 border-b border-gray-700/50">
+        <div className="flex items-center gap-3 min-w-0">
+          <AlertCircle className="text-yellow-400 shrink-0" size={20} />
+          <h3 className="text-lg sm:text-xl font-semibold text-white truncate">Rules</h3>
           {rulesTableData.length > 0 && (
-            <Badge type="status" value={`${rulesTableData.length} rules`} size="sm" />
+            <span className="shrink-0">
+              <Badge type="status" value={`${rulesTableData.length} rules`} size="sm" />
+            </span>
           )}
         </div>
         <Button
           variant="primary"
           size="sm"
           onClick={onAddRule}
-          className="group hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200"
+          className="group hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 shrink-0 w-full sm:w-auto"
         >
           <AlertCircle size={16} className="mr-2 group-hover:scale-110 transition-transform" />
           Add Rule
@@ -545,17 +548,17 @@ export const SiteRulesTab = ({
       <FilterBar
         showClear={false}
       >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <label className="text-sm text-gray-400 whitespace-nowrap">Device Type:</label>
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+            <Filter size={16} className="text-gray-400 shrink-0" />
+            <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Device Type:</label>
             <select
               value={selectedDeviceType}
               onChange={(e) => {
                 setSelectedDeviceType(e.target.value);
                 setSelectedDeviceId(''); // Reset device ID filter when device type changes
               }}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+              className="flex-1 min-w-0 max-w-full sm:min-w-[150px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Device Types</option>
               {availableDeviceTypes.length > 0 ? (
@@ -570,12 +573,12 @@ export const SiteRulesTab = ({
             </select>
           </div>
           
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-400 whitespace-nowrap">Device:</label>
+          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+            <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Device:</label>
             <select
               value={selectedDeviceId}
               onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+              className="flex-1 min-w-0 max-w-full sm:min-w-[150px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={!selectedDeviceType && availableDeviceIds.length === 0}
             >
               <option value="">All Devices</option>

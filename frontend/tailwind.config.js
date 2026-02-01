@@ -6,6 +6,14 @@ export default {
   ],
   theme: {
     extend: {
+      /* Align with website breakpoints for consistent mobile/desktop layout */
+      screens: {
+        xs: '400px',
+        sm: '640px',
+        md: '768px',
+        lg: '1024px',
+        xl: '1280px',
+      },
       colors: {
         // Visible Manus 设计系统颜色
         background: '#09090b',

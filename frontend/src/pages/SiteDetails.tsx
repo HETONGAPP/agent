@@ -409,7 +409,7 @@ export const SiteDetails = () => {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="w-full max-w-full min-w-0 space-y-6 sm:space-y-8 animate-fade-in">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
         <button
@@ -534,9 +534,10 @@ export const SiteDetails = () => {
             size="sm"
             onClick={() => setShowEditSiteModal(true)}
             className="group hover:bg-blue-600/20 hover:border-blue-500/50 transition-all duration-200"
+            title="Edit Site"
           >
-            <Edit size={16} className="mr-2" />
-            Edit Site
+            <Edit size={16} className="sm:mr-2" />
+            <span className="hidden sm:inline">Edit Site</span>
           </Button>
           <Button
             variant="secondary"
@@ -549,18 +550,20 @@ export const SiteDetails = () => {
               }
             }}
             className="group hover:bg-blue-600/20 hover:border-blue-500/50 transition-all duration-200"
+            title="Refresh"
           >
-            <RefreshCw size={16} className="mr-2 group-hover:rotate-180 transition-transform duration-500" />
-            Refresh
+            <RefreshCw size={16} className="sm:mr-2 group-hover:rotate-180 transition-transform duration-500" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
           <Button
             variant="danger"
             size="sm"
             onClick={() => setShowDeleteModal(true)}
             className="group hover:bg-red-600/90 hover:shadow-lg hover:shadow-red-500/20 transition-all duration-200"
+            title="Delete Site"
           >
-            <Trash2 size={16} className="mr-2 group-hover:scale-110 transition-transform" />
-            Delete Site
+            <Trash2 size={16} className="sm:mr-2 group-hover:scale-110 transition-transform" />
+            <span className="hidden sm:inline">Delete Site</span>
           </Button>
         </div>
       </div>
@@ -602,14 +605,14 @@ export const SiteDetails = () => {
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-700/50">
-        <nav className="flex space-x-1">
+      {/* Tabs: min-w-0 + overflow so border stays within content on mobile */}
+      <div className="min-w-0 border-b border-gray-700/50">
+        <nav className="flex flex-nowrap min-w-0 space-x-1 overflow-x-auto scrollbar-thin pb-px" style={{ WebkitOverflowScrolling: 'touch' }}>
           {(['overview', 'devices', 'alarms', 'reports', 'rules', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`relative py-3 px-6 font-medium text-sm transition-all duration-200 rounded-t-lg ${
+              className={`relative py-3 px-4 sm:px-6 font-medium text-sm transition-all duration-200 rounded-t-lg flex-shrink-0 ${
                 activeTab === tab
                   ? 'text-blue-400 bg-gray-800/50 border-t border-x border-gray-700/50'
                   : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/30'

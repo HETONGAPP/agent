@@ -153,7 +153,7 @@ export const SiteDevicesTab = ({
   ];
 
   return (
-    <div className="card">
+    <div className="card min-w-0 max-w-full">
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-700/50">
         <div className="flex items-center gap-3">
           <Plug className="text-blue-400" size={20} />
@@ -177,14 +177,14 @@ export const SiteDevicesTab = ({
       <FilterBar
         showClear={false}
       >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 min-w-0 w-full">
+          <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
+            <Filter size={16} className="text-gray-400 flex-shrink-0" />
             <label className="text-sm text-gray-400 whitespace-nowrap">Device Type:</label>
             <select
               value={selectedDeviceType}
               onChange={(e) => setSelectedDeviceType(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[120px] sm:min-w-[150px]"
             >
               <option value="">All Device Types</option>
               {availableDeviceTypes.map((deviceType) => (
@@ -194,13 +194,12 @@ export const SiteDevicesTab = ({
               ))}
             </select>
           </div>
-          
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
             <label className="text-sm text-gray-400 whitespace-nowrap">Status:</label>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[120px] sm:min-w-[150px]"
             >
               <option value="">All Statuses</option>
               {Object.entries(DEVICE_STATUS).map(([key, value]) => (

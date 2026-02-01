@@ -34,7 +34,7 @@ export const Pagination = ({
   const endItem = safeTotalItems > 0 ? Math.min(safeCurrentPage * safeItemsPerPage, safeTotalItems) : 0;
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mt-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mt-4 min-w-0 max-w-full">
       <div className="flex items-center justify-center sm:justify-start gap-2">
         <Button
           variant="secondary"

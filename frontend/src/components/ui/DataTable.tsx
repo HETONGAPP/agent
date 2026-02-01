@@ -1,6 +1,7 @@
 /**
  * Data Table Component
- * Reusable table component with sorting and filtering
+ * Reusable table component with sorting and filtering.
+ * On mobile (below md): renders as card list; on desktop: table.
  */
 
 import { ReactNode } from 'react';
@@ -13,6 +14,10 @@ export interface Column<T> {
   render?: (item: T) => ReactNode;
   sortable?: boolean;
   width?: string; // Optional column width (e.g., "150px", "20%")
+  /** Hide this column in mobile card view (e.g. redundant or too long) */
+  hideOnMobile?: boolean;
+  /** In mobile card view: span full row and lay out content (e.g. buttons) in a horizontal flex row */
+  fullRowOnMobile?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -58,69 +63,112 @@ export function DataTable<T extends Record<string, unknown>>({
     );
   }
 
+  const mobileColumns = columns.filter((c) => !c.hideOnMobile);
+
   return (
-    <div className="w-full overflow-x-auto scrollbar-thin" style={{ WebkitOverflowScrolling: 'touch' }}>
-      <div className="card min-w-full" style={{ margin: 0 }}>
-        <table className="w-full table-auto sm:table-fixed" style={{ minWidth: '600px' }}>
-          <colgroup>
-            {columns.map((column) => (
-              <col key={column.key} style={{ width: column.width || 'auto' }} />
-            ))}
-          </colgroup>
-          <thead>
-            <tr className="border-b border-gray-700">
-              {columns.map((column) => (
-                <th
-                  key={column.key}
-                  className="px-2 sm:px-3 lg:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-300 whitespace-nowrap"
-                  style={{ width: column.width || 'auto' }}
-                >
-                  {column.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+    <>
+      {/* Mobile: card list (below md) */}
+      <div className="w-full min-w-0 md:hidden space-y-3">
+        <div className="card p-0 overflow-hidden" style={{ margin: 0 }}>
+          <ul className="divide-y divide-gray-700/50">
             {data.map((item, index) => {
-              const isHighlighted = highlightedRowKey && highlightedRowValue && 
+              const isHighlighted = highlightedRowKey && highlightedRowValue &&
                 item[highlightedRowKey] === highlightedRowValue;
-              const baseClassName = `border-b border-gray-800/50 ${
-                onRowClick ? 'cursor-pointer hover:bg-gray-800/50' : ''
-              }`;
-              const highlightClassName = isHighlighted 
-                ? 'bg-amber-500/20 border-amber-500/50 animate-pulse' 
-                : '';
+              const rowKey = (item as any).id || (item as any).rule_id || (item as any).key || (item as any).alarm_id || (item as any).device_id || `row-${index}`;
               const customClassName = getRowClassName ? getRowClassName(item, index) : '';
-              
-              // Use a stable key - prefer item.id, item.rule_id, or item.key, fallback to index
-              const rowKey = (item as any).id || (item as any).rule_id || (item as any).key || `row-${index}`;
-              
               return (
-              <tr
-                key={rowKey}
-                className={`${baseClassName} ${highlightClassName} ${customClassName}`}
-              onClick={() => onRowClick?.(item)}
-            >
-              {columns.map((column) => (
-                <td 
-                  key={column.key} 
-                  className="px-2 sm:px-3 lg:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-300"
-                  style={{ width: column.width || 'auto' }}
+                <li
+                  key={rowKey}
+                  onClick={() => onRowClick?.(item)}
+                  className={`p-3 sm:p-4 ${onRowClick ? 'cursor-pointer active:bg-gray-700/30' : ''} ${isHighlighted ? 'bg-amber-500/20 border-l-4 border-amber-500' : ''} ${customClassName}`}
                 >
-                  <div className="truncate max-w-[150px] sm:max-w-none">
-                    {column.render
-                      ? column.render(item)
-                      : (item[column.key] as ReactNode)}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    {mobileColumns.map((column) => {
+                      const isFullRow = column.fullRowOnMobile || column.key === 'actions';
+                      return (
+                        <div
+                          key={column.key}
+                          className={`flex flex-col gap-0.5 min-w-0 ${isFullRow ? 'col-span-2' : ''}`}
+                        >
+                          <span className="text-xs font-medium text-gray-500 shrink-0">{column.header}</span>
+                          <div
+                            className={`text-sm text-gray-300 min-w-0 break-words ${isFullRow ? 'flex flex-wrap items-center gap-2' : ''}`}
+                          >
+                            {column.render
+                              ? column.render(item)
+                              : (item[column.key] as ReactNode)}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </td>
-              ))}
-            </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
-    </div>
+
+      {/* Desktop: table (md and up) - scroll inside card so border always contains content when zoomed */}
+      <div className="hidden md:block w-full min-w-0">
+        <div className="card min-w-0 overflow-x-auto scrollbar-thin" style={{ margin: 0, WebkitOverflowScrolling: 'touch' }}>
+          <table className="w-full min-w-max table-auto" style={{ minWidth: 'max-content' }}>
+            <colgroup>
+              {columns.map((column) => (
+                <col key={column.key} style={{ width: column.width || 'auto' }} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr className="border-b border-gray-700">
+                {columns.map((column) => (
+                  <th
+                    key={column.key}
+                    className="px-3 lg:px-4 py-3 text-left text-sm font-semibold text-gray-300 whitespace-nowrap"
+                    style={{ width: column.width || 'auto' }}
+                  >
+                    {column.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((item, index) => {
+                const isHighlighted = highlightedRowKey && highlightedRowValue &&
+                  item[highlightedRowKey] === highlightedRowValue;
+                const baseClassName = `border-b border-gray-800/50 ${onRowClick ? 'cursor-pointer hover:bg-gray-800/50' : ''}`;
+                const highlightClassName = isHighlighted ? 'bg-amber-500/20 border-amber-500/50' : '';
+                const customClassName = getRowClassName ? getRowClassName(item, index) : '';
+                const rowKey = (item as any).id || (item as any).rule_id || (item as any).key || (item as any).alarm_id || (item as any).device_id || `row-${index}`;
+                return (
+                  <tr
+                    key={rowKey}
+                    className={`${baseClassName} ${highlightClassName} ${customClassName}`}
+                    onClick={() => onRowClick?.(item)}
+                  >
+                    {columns.map((column) => {
+                      const isActions = column.key === 'actions';
+                      return (
+                        <td
+                          key={column.key}
+                          className={`px-3 lg:px-4 py-2.5 lg:py-3 text-sm text-gray-300 align-middle ${isActions ? 'whitespace-nowrap' : ''}`}
+                          style={{ width: column.width || 'auto' }}
+                        >
+                          <div className={isActions ? 'flex items-center gap-2 flex-wrap' : 'truncate'}>
+                            {column.render
+                              ? column.render(item)
+                              : (item[column.key] as ReactNode)}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 

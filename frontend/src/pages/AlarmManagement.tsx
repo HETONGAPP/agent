@@ -225,6 +225,7 @@ export const AlarmManagement = () => {
     {
       key: 'location',
       header: 'Location',
+      hideOnMobile: true,
       render: (siteSummary: any) => (
         <span className="text-gray-400 text-sm">
           {siteSummary.location || 'N/A'}
@@ -259,6 +260,7 @@ export const AlarmManagement = () => {
     {
       key: 'timestamp',
       header: 'Latest Alarm',
+      hideOnMobile: true,
       render: (siteSummary: any) => (
         <span className="text-gray-400 text-xs">
           {siteSummary.timestamp ? formatRelativeTime(siteSummary.timestamp) : 'N/A'}
@@ -312,11 +314,6 @@ export const AlarmManagement = () => {
                 </>
               )}
             </Button>
-            <Link to={`/datacenter/sites/${siteSummary.site_id}`}>
-              <Button variant="secondary" size="sm">
-                View Site
-              </Button>
-            </Link>
           </div>
         );
       },
@@ -357,9 +354,9 @@ export const AlarmManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+    <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
+      <div className="flex flex-row items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Alarm Management</h1>
           <p className="text-gray-400 text-sm">
             View sites with alarms
@@ -379,7 +376,7 @@ export const AlarmManagement = () => {
 
       {/* Statistics */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div className="card">
             <div className="text-sm text-gray-400">Total Alarms</div>
             <div className="text-2xl font-bold text-white">{stats.total}</div>

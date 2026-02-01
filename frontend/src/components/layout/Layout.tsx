@@ -1,13 +1,13 @@
 /**
  * Main Layout Component
- * Provides the overall page structure with navigation
+ * Provides the overall page structure with navigation.
+ * Mobile: uses 100dvh, safe-area insets, and responsive gutters (aligned with website approach).
  */
 
 import { ReactNode } from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { PageTransition } from '@/components/ui/PageTransition';
-import { useSidebarStore } from '@/store/useSidebarStore';
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,27 +15,29 @@ interface LayoutProps {
 
 export const Layout = ({ children }: LayoutProps) => {
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 flex flex-col overflow-hidden">
+    <div
+      className="flex flex-col overflow-hidden bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 min-h-screen"
+      style={{
+        minHeight: '100vh',
+        minHeight: '100dvh',
+        height: '100dvh',
+      }}
+    >
       <Navbar />
-      <div className="flex flex-1 overflow-hidden relative min-h-0">
-        {/* Hide sidebar on mobile, show on desktop — h-full so sidebar fits and bottom release is visible */}
-        <div className="hidden lg:flex lg:flex-col lg:h-full">
+      <div className="flex flex-1 min-h-0 relative overflow-hidden">
+        <div className="hidden lg:flex lg:flex-col lg:min-h-full lg:self-stretch">
           <Sidebar />
         </div>
-        <main 
-          className="flex-1 w-full transition-all duration-300 overflow-y-auto bg-gradient-to-b from-transparent to-gray-900/50 scrollbar-thin"
-          style={{ 
-            marginLeft: 0,
-            width: '100%',
-            maxWidth: '100%',
-            minWidth: 0,
-            minHeight: 0,
-            overflowX: 'hidden',
-            padding: '0.75rem',
-            paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))'
+        <main
+          className="flex-1 w-full min-w-0 min-h-0 overflow-x-hidden overflow-y-auto bg-gradient-to-b from-transparent to-gray-900/50 scrollbar-thin transition-all duration-300"
+          style={{
+            padding: 'var(--layout-main-padding)',
+            paddingLeft: 'calc(var(--layout-main-padding) + var(--safe-area-inset-left))',
+            paddingRight: 'calc(var(--layout-main-padding) + var(--safe-area-inset-right))',
+            paddingBottom: 'calc(var(--main-padding-bottom) + var(--safe-area-inset-bottom))',
           }}
         >
-          <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', paddingBottom: '4rem' }}>
+          <div className="w-full max-w-full box-border">
             <PageTransition>
               {children}
             </PageTransition>

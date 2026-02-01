@@ -96,10 +96,14 @@ export const Navbar = () => {
 
   return (
     <motion.nav
-      className="bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 border-b border-gray-700/50 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 shadow-lg relative z-[100]"
+      className="bg-gradient-to-r from-gray-800 via-gray-800 to-gray-900 border-b border-gray-700/50 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 shadow-lg relative z-[100] shrink-0"
       style={{ 
         willChange: 'transform, opacity',
-        position: 'relative'
+        position: 'relative',
+        minHeight: 'var(--header-height)',
+        paddingTop: 'calc(0.625rem + var(--safe-area-inset-top))',
+        paddingLeft: 'calc(0.75rem + var(--safe-area-inset-left))',
+        paddingRight: 'calc(0.75rem + var(--safe-area-inset-right))',
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -150,12 +154,11 @@ export const Navbar = () => {
                   
                   {/* Dropdown Menu */}
                   <motion.div
-                    className="fixed left-3 top-14 w-[calc(100%-1.5rem)] max-w-xs bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-700/50 py-2 z-[100] lg:hidden"
+                    className="fixed left-0 right-0 mx-3 top-[var(--header-height)] w-[calc(100%-1.5rem)] max-w-xs max-h-[calc(100dvh-var(--header-height)-1rem)] bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl border border-gray-700/50 py-2 z-[100] lg:hidden overflow-y-auto"
                     style={{ 
                       willChange: 'transform, opacity',
                       zIndex: 100,
-                      maxHeight: 'calc(100vh - 4rem)',
-                      overflowY: 'auto'
+                      marginTop: 'calc(var(--safe-area-inset-top) + 0.25rem)',
                     }}
                     initial={{ opacity: 0, scale: 0.95, y: -10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -256,7 +259,7 @@ export const Navbar = () => {
                     style={{ 
                       willChange: 'transform, opacity',
                       zIndex: 99999,
-                      top: '56px' // Adjust based on navbar height (mobile is smaller)
+                      top: 'calc(var(--header-height) + var(--safe-area-inset-top) + 0.5rem)',
                     }}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}

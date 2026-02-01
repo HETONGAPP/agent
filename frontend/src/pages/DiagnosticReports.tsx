@@ -312,6 +312,7 @@ export const DiagnosticReports = () => {
     {
       key: 'current_status',
       header: 'Status',
+      hideOnMobile: true,
       render: (diagnostic) => (
         <span className="text-gray-300 text-sm truncate max-w-xs block">
           {diagnostic.current_status || 'N/A'}
@@ -401,7 +402,7 @@ export const DiagnosticReports = () => {
     }
     
     return (
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
@@ -453,9 +454,9 @@ export const DiagnosticReports = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+    <div className="w-full max-w-full min-w-0 space-y-4 sm:space-y-6">
+      <div className="flex flex-row items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Diagnostic Reports</h1>
           <p className="text-gray-400 text-sm">AI-powered diagnostic analysis</p>
         </div>

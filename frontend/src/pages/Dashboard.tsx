@@ -339,7 +339,7 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 w-full" style={{ maxWidth: '100%', boxSizing: 'border-box' }}>
+    <div className="space-y-3 sm:space-y-4 lg:space-y-6 w-full min-w-0 max-w-full" style={{ boxSizing: 'border-box' }}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Dashboard</h1>

@@ -3,6 +3,9 @@
  * Centralized constants to avoid magic numbers and strings
  */
 
+/** Release version — change here to update version shown in sidebar and elsewhere */
+export const RELEASE = '1.2.0';
+
 // API Endpoints
 export const API_ENDPOINTS = {
   // Health

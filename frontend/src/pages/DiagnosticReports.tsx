@@ -3,7 +3,7 @@
  * Displays diagnostic reports
  */
 
-import { useState, useEffect, useMemo, startTransition, useDeferredValue } from 'react';
+import { useState, useEffect, useMemo, useRef, startTransition, useDeferredValue } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { useDiagnostics } from '@/hooks/useDiagnostics';
 import { useRealtime } from '@/hooks/useRealtime';
@@ -70,7 +70,18 @@ export const DiagnosticReports = () => {
   const [diagnosticToDelete, setDiagnosticToDelete] = useState<Diagnostic | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  
+  const viewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile for View action debounce (md breakpoint = 768px)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    const handler = () => setIsMobile(window.matchMedia('(max-width: 767px)').matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // Sync filters with state on mount
   useEffect(() => {
     if (filters.risk_level) {
@@ -184,10 +195,14 @@ export const DiagnosticReports = () => {
     }
   }, [location.pathname, setSelectedDiagnostic]);
 
-  // Clear selected diagnostic on component unmount
+  // Clear selected diagnostic and view debounce timer on component unmount
   useEffect(() => {
     return () => {
       setSelectedDiagnostic(null);
+      if (viewDebounceRef.current) {
+        clearTimeout(viewDebounceRef.current);
+        viewDebounceRef.current = null;
+      }
     };
   }, [setSelectedDiagnostic]);
 
@@ -346,7 +361,15 @@ export const DiagnosticReports = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              fetchDiagnostic(diagnostic.alarm_id);
+              if (isMobile) {
+                if (viewDebounceRef.current) clearTimeout(viewDebounceRef.current);
+                viewDebounceRef.current = setTimeout(() => {
+                  viewDebounceRef.current = null;
+                  fetchDiagnostic(diagnostic.alarm_id);
+                }, 200);
+              } else {
+                fetchDiagnostic(diagnostic.alarm_id);
+              }
             }}
             className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
             title="View Details"
@@ -609,6 +632,7 @@ export const DiagnosticReports = () => {
           onClose={() => setSelectedDiagnostic(null)}
           title=""
           size="xl"
+          noAnimation={isMobile}
         >
           <DiagnosticOutput 
             result={{ report: selectedDiagnostic }} 

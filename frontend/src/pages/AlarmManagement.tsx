@@ -122,17 +122,21 @@ export const AlarmManagement = () => {
     };
     }, [filters, pagination.limit, pagination.offset, fetchAlarms, fetchStats]);
 
-  // Initial data fetch on mount - ensure data is loaded immediately
+  // Initial data fetch on mount - same pattern as Dashboard (full-page PageLoading until ready)
   useEffect(() => {
     const loadInitialData = async () => {
       setInitialLoading(true);
+      const minDisplayMs = 300;
+      const start = Date.now();
       try {
         await Promise.all([
           fetchAlarms(filters, pagination.limit, pagination.offset, true),
           fetchStats(),
         ]);
       } finally {
-        setInitialLoading(false);
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, minDisplayMs - elapsed);
+        setTimeout(() => setInitialLoading(false), remaining);
       }
     };
     loadInitialData();

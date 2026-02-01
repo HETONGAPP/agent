@@ -90,7 +90,7 @@ export const StatCard = ({
 
   return (
     <motion.div
-      className={`card card-hover border ${colorClasses[color]} ${onClick ? 'cursor-pointer' : ''} rounded-xl shadow-lg hover:shadow-xl relative overflow-hidden`}
+      className={`card card-hover border ${colorClasses[color]} ${onClick ? 'cursor-pointer' : ''} rounded-xl shadow-none sm:shadow-lg sm:hover:shadow-xl relative overflow-hidden`}
       style={{ willChange: 'transform, opacity' }}
       whileHover={{ scale: 1.02 }}
       onClick={onClick}

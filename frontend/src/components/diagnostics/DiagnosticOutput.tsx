@@ -69,16 +69,20 @@ const SectionCard = ({
   icon: Icon, 
   title, 
   children, 
-  className = '' 
+  className = '',
+  noAnimate = false
 }: { 
   icon: any; 
   title: string; 
   children: React.ReactNode;
   className?: string;
-}) => (
-  <motion.div
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
+  noAnimate?: boolean;
+}) => {
+  const Wrapper = noAnimate ? 'div' : motion.div;
+  const wrapperProps = noAnimate ? {} : { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
+  return (
+  <Wrapper
+    {...wrapperProps}
     className={`glass-dark rounded-xl p-5 border border-zinc-700/50 ${className}`}
   >
     <div className="flex items-center gap-3 mb-4">
@@ -92,15 +96,16 @@ const SectionCard = ({
     <div className="text-zinc-300 text-sm leading-relaxed">
       {children}
     </div>
-  </motion.div>
-);
+  </Wrapper>
+  );
+};
 
 export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: DiagnosticOutputProps) => {
   const report = result?.report || result;
   
   const containerClasses = variant === 'overlay' 
     ? "absolute bottom-0 left-0 right-0 bg-gradient-to-b from-zinc-900 via-zinc-900 to-black backdrop-blur-xl border-t border-amber-500/20 max-h-[70vh] overflow-y-auto shadow-2xl"
-    : "relative bg-gradient-to-b from-zinc-900/95 via-zinc-900/95 to-black/95 backdrop-blur-xl border-0 rounded-lg overflow-hidden h-full";
+    : "relative bg-gradient-to-b from-zinc-900/95 via-zinc-900/95 to-black/95 backdrop-blur-xl border-0 rounded-lg overflow-hidden h-full -m-3 sm:-m-4";
 
   const handleDownloadPDF = async () => {
     if (!report) return;
@@ -190,27 +195,35 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
     }).filter(Boolean);  // Remove null entries
   };
 
+  // Inline (e.g. inside Modal/popup): use plain div to avoid any motion stutter on mobile
   const motionProps = variant === 'overlay' 
     ? {
         initial: { y: '100%' },
         animate: { y: 0 },
         exit: { y: '100%' },
-        transition: { type: 'spring', damping: 25, stiffness: 200 }
+        transition: { type: 'spring' as const, damping: 25, stiffness: 200 }
       }
-    : {
-        initial: { opacity: 0, y: 20 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.3 }
-      };
+    : null;
 
-  return (
-    <motion.div
-      {...motionProps}
-      className={containerClasses}
-    >
-      <div className={`${variant === 'inline' ? 'p-6' : 'p-6 max-w-6xl mx-auto'}`}>
+  const content = (
+      <div className={`${variant === 'inline' ? 'relative px-3 py-5 sm:px-6 sm:py-6 max-w-full' : 'p-6 max-w-6xl mx-auto'}`}>
+        {/* Mobile: X at top-right of report (inline popup only) */}
+        {variant === 'inline' && onClose && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            className="sm:hidden absolute top-0 right-0 z-20 p-2.5 rounded-bl-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/90 border border-transparent border-l border-b border-zinc-700/50 cursor-pointer"
+            aria-label="Close"
+          >
+            <X size={22} strokeWidth={2} />
+          </button>
+        )}
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800/50">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-zinc-800/50">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 shadow-lg shadow-amber-500/10">
               <FileText size={24} className="text-amber-400" />
@@ -237,11 +250,9 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (onClose) {
-                    onClose();
-                  }
+                  onClose();
                 }}
-                className="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-all border border-transparent hover:border-zinc-700/50 cursor-pointer z-10 relative"
+                className={`p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/70 transition-all border border-transparent hover:border-zinc-700/50 cursor-pointer z-10 relative ${variant === 'inline' ? 'hidden sm:inline-flex' : ''}`}
                 aria-label="Close"
               >
                 <X size={20} strokeWidth={2} />
@@ -254,6 +265,58 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
           <div id="diagnostic-report-content" className="space-y-6">
             {/* Risk Level - Simple Display */}
             {report.risk_level && (
+              (variant === 'inline' ? (
+              <div
+                className={`rounded-xl border-2 overflow-hidden ${
+                  report.risk_level === 'High' 
+                    ? 'bg-gradient-to-br from-red-950/40 via-red-900/30 to-red-950/40 border-red-500/60 shadow-lg shadow-red-500/20' 
+                    : report.risk_level === 'Medium'
+                    ? 'bg-gradient-to-br from-amber-950/40 via-amber-900/30 to-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-500/20'
+                    : 'bg-gradient-to-br from-green-950/40 via-green-900/30 to-green-950/40 border-green-500/60 shadow-lg shadow-green-500/20'
+                }`}
+              >
+                <div className="p-5">
+                  <div className="flex items-center gap-4">
+                    <div className={`flex-shrink-0 p-3 rounded-lg ${
+                      report.risk_level === 'High'
+                        ? 'bg-red-500/20 border-2 border-red-500/50'
+                        : report.risk_level === 'Medium'
+                        ? 'bg-amber-500/20 border-2 border-amber-500/50'
+                        : 'bg-green-500/20 border-2 border-green-500/50'
+                    }`}>
+                      {report.risk_level === 'High' ? (
+                        <AlertCircle size={24} className="text-red-400" />
+                      ) : report.risk_level === 'Medium' ? (
+                        <AlertTriangle size={24} className="text-amber-400" />
+                      ) : (
+                        <Shield size={24} className="text-green-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">
+                          Risk Assessment
+                        </div>
+                        <div className={`text-2xl font-bold ${
+                          report.risk_level === 'High'
+                            ? 'text-red-400'
+                            : report.risk_level === 'Medium'
+                            ? 'text-amber-400'
+                            : 'text-green-400'
+                        }`}>
+                          {report.risk_level}
+                        </div>
+                      </div>
+                      {report.risk_level === 'High' && (
+                        <span className="px-3 py-1.5 text-xs font-semibold bg-red-500/30 text-red-300 border border-red-500/50 rounded-full whitespace-nowrap">
+                          Immediate Attention
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              ) : (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -309,18 +372,19 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                   </div>
                 </div>
               </motion.div>
+              ))
             )}
 
             {/* Current Status */}
             {report.current_status && (
-              <SectionCard icon={Activity} title="Current Status">
+              <SectionCard icon={Activity} title="Current Status" noAnimate={variant === 'inline'}>
                 <p className="text-zinc-200 leading-relaxed">{report.current_status}</p>
               </SectionCard>
             )}
 
             {/* Possible Causes */}
             {report.possible_causes && report.possible_causes.length > 0 && (
-              <SectionCard icon={AlertCircle} title="Possible Causes">
+              <SectionCard icon={AlertCircle} title="Possible Causes" noAnimate={variant === 'inline'}>
                 <ul className="space-y-2">
                   {report.possible_causes.map((cause: string, index: number) => (
                     <li key={index} className="flex items-start gap-2">
@@ -334,9 +398,15 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
 
             {/* Recommended Actions - Flat List Layout */}
             {report.recommended_actions && report.recommended_actions.length > 0 && (
-              <SectionCard icon={Lightbulb} title="Recommended Actions">
+              <SectionCard icon={Lightbulb} title="Recommended Actions" noAnimate={variant === 'inline'}>
                 <ul className="space-y-3">
                   {report.recommended_actions.map((action: string, index: number) => (
+                    variant === 'inline' ? (
+                      <li key={index} className="flex items-start gap-3">
+                        <div className="mt-0.5 w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                        <p className="text-sm text-zinc-300 leading-relaxed">{action}</p>
+                      </li>
+                    ) : (
                     <motion.li
                       key={index}
                       initial={{ opacity: 0, x: -10 }}
@@ -347,6 +417,7 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                       <div className="mt-0.5 w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
                       <p className="text-sm text-zinc-300 leading-relaxed">{action}</p>
                     </motion.li>
+                    )
                   ))}
                 </ul>
               </SectionCard>
@@ -354,7 +425,7 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
 
             {/* References */}
             {report.references && report.references.length > 0 && (
-              <SectionCard icon={BookOpen} title="References">
+              <SectionCard icon={BookOpen} title="References" noAnimate={variant === 'inline'}>
                 <ul className="space-y-2">
                   {report.references.map((ref: string, index: number) => (
                     <li key={index} className="flex items-start gap-2 text-zinc-400">
@@ -368,6 +439,23 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
 
             {/* Full Markdown Report */}
             {report.markdown && (
+              variant === 'inline' ? (
+              <div className="glass-dark rounded-xl p-6 border border-zinc-700/50">
+                <div className="flex items-center gap-3 mb-5 pb-4 border-b border-zinc-800">
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <FileText size={20} className="text-amber-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide">
+                    Full Report
+                  </h3>
+                </div>
+                <div className="prose prose-invert max-w-none">
+                  <div className="text-sm leading-relaxed space-y-2">
+                    {renderMarkdown(report.markdown)}
+                  </div>
+                </div>
+              </div>
+              ) : (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -385,13 +473,22 @@ export const DiagnosticOutput = ({ result, onClose, variant = 'overlay' }: Diagn
                 <div className="prose prose-invert max-w-none">
                   <div className="text-sm leading-relaxed space-y-2">
                     {renderMarkdown(report.markdown)}
+                  </div>
                 </div>
-              </div>
               </motion.div>
+              )
             )}
           </div>
         )}
       </div>
+  );
+
+  if (variant === 'inline') {
+    return <div className={containerClasses}>{content}</div>;
+  }
+  return (
+    <motion.div {...motionProps!} className={containerClasses}>
+      {content}
     </motion.div>
   );
 };

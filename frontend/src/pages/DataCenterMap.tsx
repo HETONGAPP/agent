@@ -19,27 +19,26 @@ export const DataCenterMapPage = () => {
   const { sites, loading, fetchSites, error } = useSiteStore(); // Sites are preloaded in App.tsx
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [clickedPosition, setClickedPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Sites are preloaded in App.tsx, but refresh if needed (e.g., after adding a site)
-  // Only fetch if sites list is empty (fallback) - use ref to prevent infinite loops
-  const hasFetchedRef = React.useRef(false);
+  // Initial load on mount - same pattern as Dashboard (full-page PageLoading until ready)
   useEffect(() => {
-    if (sites.length === 0 && !loading && !hasFetchedRef.current) {
-      console.log('[DataCenterMapPage] Sites list empty, fetching...');
-      fetchSites();
-      hasFetchedRef.current = true;
-    }
+    const loadInitialData = async () => {
+      setInitialLoading(true);
+      const minDisplayMs = 300;
+      const start = Date.now();
+      try {
+        await fetchSites();
+      } finally {
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, minDisplayMs - elapsed);
+        setTimeout(() => setInitialLoading(false), remaining);
+      }
+    };
+    loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
-
-  // Debug: Log sites when they change
-  useEffect(() => {
-    console.log('[DataCenterMapPage] Sites updated:', sites.length, 'sites');
-    if (sites.length > 0) {
-      console.log('[DataCenterMapPage] Site details:', sites);
-    }
-  }, [sites]);
+  }, []);
 
   const handleSiteClick = (site: Site) => {
     navigate(`/datacenter/sites/${site.site_id}`);
@@ -56,8 +55,8 @@ export const DataCenterMapPage = () => {
     fetchSites();
   };
 
-  // Show loading state during initial data fetch
-  if (loading && sites.length === 0) {
+  // Show loading state during initial data fetch (same as Dashboard)
+  if (initialLoading) {
     return <PageLoading message="Loading data center map..." />;
   }
 

@@ -42,17 +42,21 @@ export const DeviceManagement = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Initial data fetch on mount
+  // Initial data fetch on mount - same pattern as Dashboard (full-page PageLoading until ready)
   useEffect(() => {
     const loadInitialData = async () => {
       setInitialLoading(true);
+      const minDisplayMs = 300;
+      const start = Date.now();
       try {
         await Promise.all([
           fetchDevices(),
           fetchStats(),
         ]);
       } finally {
-        setInitialLoading(false);
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, minDisplayMs - elapsed);
+        setTimeout(() => setInitialLoading(false), remaining);
       }
     };
     loadInitialData();

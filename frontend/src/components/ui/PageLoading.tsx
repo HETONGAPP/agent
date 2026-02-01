@@ -1,6 +1,7 @@
 /**
  * Page Loading Component
- * Full-page loading indicator for page-level loading states
+ * Full-page loading indicator for page-level loading states.
+ * Same height as main content area (below header) on mobile and desktop, like Dashboard.
  */
 
 import { LoadingSpinner } from './LoadingSpinner';
@@ -12,7 +13,10 @@ interface PageLoadingProps {
 
 export const PageLoading = ({ message = 'Loading...', className = '' }: PageLoadingProps) => {
   return (
-    <div className={`flex flex-col items-center justify-center min-h-[60vh] ${className}`}>
+    <div
+      className={`flex flex-col items-center justify-center w-full ${className}`}
+      style={{ minHeight: 'calc(100dvh - var(--header-height))' }}
+    >
       <LoadingSpinner size="lg" />
       <p className="mt-4 text-gray-400 text-sm">{message}</p>
     </div>

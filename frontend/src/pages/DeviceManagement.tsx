@@ -10,6 +10,7 @@ import { useWebSocket, EventType } from '@/hooks/useWebSocket';
 import { websocketEventManager } from '@/services/websocketEventManager';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { FilterBar } from '@/components/ui/FilterBar';
+import { FilterSelect } from '@/components/ui/FilterSelect';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -193,14 +194,12 @@ export const DeviceManagement = () => {
     },
   });
 
-  const handleFilterChange = () => {
+  const applyFilters = (typeOverride?: string, statusOverride?: string) => {
+    const type = typeOverride !== undefined ? typeOverride : selectedDeviceType;
+    const status = statusOverride !== undefined ? statusOverride : selectedStatus;
     const newFilters: DeviceFilters = {};
-    if (selectedDeviceType) {
-      newFilters.device_type = selectedDeviceType as any;
-    }
-    if (selectedStatus) {
-      newFilters.status = selectedStatus as any;
-    }
+    if (type) newFilters.device_type = type as any;
+    if (status) newFilters.status = status as any;
     setLocalFilters(newFilters);
     setFilters(newFilters);
     fetchDevices(newFilters);
@@ -366,61 +365,38 @@ export const DeviceManagement = () => {
       )}
 
       {/* Search and Filters */}
-      <FilterBar 
+      <FilterBar
         onClear={handleClearFilters}
         searchComponent={
           <SearchInput
-            placeholder="Search devices by ID, type, or integration..."
+            placeholder="Search devices..."
             onSearch={handleSearch}
           />
         }
       >
-          {/* Filter Group - Hidden on mobile */}
-          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">Filters</span>
-            <div className="h-4 w-px bg-gray-700"></div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Device Type</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[140px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedDeviceType}
-                onChange={(e) => setSelectedDeviceType(e.target.value)}
-              >
-                <option value="">All Types</option>
-                {Object.values(DEVICE_TYPES).map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="h-4 w-px bg-gray-700"></div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Status</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[120px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-              >
-                <option value="">All Statuses</option>
-                {Object.values(DEVICE_STATUS).map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 ml-auto">
-            <Button variant="primary" size="sm" onClick={handleFilterChange}>
-              Apply Filters
-            </Button>
-          </div>
-        </FilterBar>
+        <div className="hidden sm:flex items-center gap-x-4 gap-y-2 flex-wrap">
+          <FilterSelect
+            label="Type"
+            value={selectedDeviceType}
+            onChange={(v) => {
+              setSelectedDeviceType(v);
+              applyFilters(v, selectedStatus);
+            }}
+            options={Object.values(DEVICE_TYPES).map((t) => ({ value: t, label: t }))}
+            placeholder="All types"
+          />
+          <FilterSelect
+            label="Status"
+            value={selectedStatus}
+            onChange={(v) => {
+              setSelectedStatus(v);
+              applyFilters(selectedDeviceType, v);
+            }}
+            options={Object.values(DEVICE_STATUS).map((s) => ({ value: s, label: s }))}
+            placeholder="All statuses"
+          />
+        </div>
+      </FilterBar>
 
       {/* Error Message */}
       {error && (

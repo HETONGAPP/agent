@@ -9,6 +9,7 @@ import { useDiagnostics } from '@/hooks/useDiagnostics';
 import { useRealtime } from '@/hooks/useRealtime';
 import { DataTable, Column } from '@/components/ui/DataTable';
 import { FilterBar } from '@/components/ui/FilterBar';
+import { FilterSelect } from '@/components/ui/FilterSelect';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Pagination } from '@/components/ui/Pagination';
@@ -190,38 +191,29 @@ export const DiagnosticReports = () => {
     };
   }, [setSelectedDiagnostic]);
 
-  const handleFilterChange = () => {
+  const applyFilters = (updates: Partial<DiagnosticFilters> = {}) => {
     const newFilters: DiagnosticFilters = {
-      ...filters, // Preserve existing filters (like date range and alarm_id)
+      ...filters,
       alarm_id: alarmIdParam || undefined,
+      ...updates,
     };
-    if (selectedPriority) {
-      newFilters.risk_level = selectedPriority as any;
-    } else {
-      // Remove risk_level filter if not selected
-      delete newFilters.risk_level;
-    }
-    if (selectedSiteId) {
-      newFilters.site_id = selectedSiteId;
-    } else {
-      delete newFilters.site_id;
-    }
-    if (selectedPriority) {
-      newFilters.risk_level = selectedPriority as any;
-    } else {
-      delete newFilters.risk_level;
-    }
+    if (updates.risk_level !== undefined) newFilters.risk_level = updates.risk_level as any;
+    else if (selectedPriority) newFilters.risk_level = selectedPriority as any;
+    else delete newFilters.risk_level;
+    if (updates.site_id !== undefined) newFilters.site_id = updates.site_id || undefined;
+    else if (selectedSiteId) newFilters.site_id = selectedSiteId;
+    else delete newFilters.site_id;
     setLocalFilters(newFilters);
     setFilters(newFilters);
     fetchDiagnostics(newFilters, pagination.limit, 0);
     setPagination(pagination.limit, 0);
-    // Also update stats with new filters to keep them in sync
     fetchStats(undefined, undefined, newFilters);
   };
 
   const handleClearFilters = () => {
     setSelectedSiteId('');
     setSelectedPriority('');
+    setPrioritySortOrder('');
     const newFilters: DiagnosticFilters = {};
     setLocalFilters(newFilters);
     setFilters(newFilters);
@@ -486,175 +478,96 @@ export const DiagnosticReports = () => {
       {statisticsMemo}
 
       {/* Search and Filters */}
-      <FilterBar 
+      <FilterBar
         onClear={handleClearFilters}
         searchComponent={
-          <SearchInput
-            placeholder="Search diagnostics by diagnostic ID or status..."
-            onSearch={handleSearch}
-          />
+          <SearchInput placeholder="Search diagnostics..." onSearch={handleSearch} />
         }
       >
-          {alarmIdParam && (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md whitespace-nowrap flex-shrink-0">
-              <span className="text-xs font-medium text-blue-300">Diagnostic ID:</span>
-              <span className="font-mono text-blue-400 text-sm font-semibold">{alarmIdParam}</span>
-            </div>
-          )}
-          
-          {/* Filter Group - Hidden on mobile */}
-          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
-            <div className="h-4 w-px bg-gray-700"></div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Site</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[140px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedSiteId}
-                onChange={(e) => setSelectedSiteId(e.target.value)}
-              >
-                <option value="">All Sites</option>
-                {sites.map((site) => (
-                  <option key={site.site_id} value={site.site_id}>
-                    {site.site_name || site.site_id}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="h-4 w-px bg-gray-700"></div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 whitespace-nowrap font-medium">Priority</label>
-              <select
-                className="px-2.5 py-1.5 bg-gray-900/80 border border-gray-700 rounded-md text-white text-sm min-w-[120px] hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                value={selectedPriority}
-                onChange={(e) => setSelectedPriority(e.target.value)}
-              >
-                <option value="">All</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
+        {alarmIdParam && (
+          <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded bg-blue-500/10 border border-blue-500/20 shrink-0">
+            <span className="text-xs text-blue-400/80">ID</span>
+            <span className="font-mono text-xs text-blue-300">{alarmIdParam}</span>
           </div>
-
-          {/* Sort Group - Hidden on mobile */}
-          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider w-10 flex-shrink-0">Sort</span>
-            <div className="h-4 w-px bg-gray-700 flex-shrink-0"></div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <Button
-                variant={prioritySortOrder === 'asc' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => {
-                  if (prioritySortOrder === 'asc') {
-                    setPrioritySortOrder('');
-                  } else {
-                    setPrioritySortOrder('asc');
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium w-[110px] flex-shrink-0 box-border"
-                style={{ 
-                  minWidth: '110px', 
-                  maxWidth: '110px',
-                  borderWidth: prioritySortOrder === 'asc' ? '1px' : '1px',
-                  borderStyle: 'solid',
-                  borderColor: prioritySortOrder === 'asc' ? 'transparent' : 'rgb(75, 85, 99)',
-                  boxShadow: prioritySortOrder === 'asc' ? '0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -2px rgba(59, 130, 246, 0.2)' : 'none'
-                }}
-                title="Sort: Low to High"
-              >
-                <ArrowUp size={12} />
-                Low to High
-              </Button>
-              <Button
-                variant={prioritySortOrder === 'desc' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => {
-                  if (prioritySortOrder === 'desc') {
-                    setPrioritySortOrder('');
-                  } else {
-                    setPrioritySortOrder('desc');
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium w-[110px] flex-shrink-0 box-border"
-                style={{ 
-                  minWidth: '110px', 
-                  maxWidth: '110px',
-                  borderWidth: prioritySortOrder === 'desc' ? '1px' : '1px',
-                  borderStyle: 'solid',
-                  borderColor: prioritySortOrder === 'desc' ? 'transparent' : 'rgb(75, 85, 99)',
-                  boxShadow: prioritySortOrder === 'desc' ? '0 10px 15px -3px rgba(59, 130, 246, 0.2), 0 4px 6px -2px rgba(59, 130, 246, 0.2)' : 'none'
-                }}
-                title="Sort: High to Low"
-              >
-                <ArrowDown size={12} />
-                High to Low
-              </Button>
+        )}
+        <div className="hidden sm:flex items-center gap-x-4 gap-y-2 flex-wrap">
+          <FilterSelect
+            label="Site"
+            value={selectedSiteId}
+            onChange={(v) => {
+              setSelectedSiteId(v);
+              applyFilters({ site_id: v || undefined });
+            }}
+            options={sites.map((s) => ({ value: s.site_id, label: s.site_name || s.site_id }))}
+            placeholder="All sites"
+          />
+          <FilterSelect
+            label="Priority"
+            value={selectedPriority}
+            onChange={(v) => {
+              setSelectedPriority(v);
+              applyFilters({ risk_level: v as any });
+            }}
+            options={[
+              { value: 'High', label: 'High' },
+              { value: 'Medium', label: 'Medium' },
+              { value: 'Low', label: 'Low' },
+            ]}
+            placeholder="All"
+          />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-gray-500">Sort</span>
+            <Button
+              variant={prioritySortOrder === 'asc' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setPrioritySortOrder(prioritySortOrder === 'asc' ? '' : 'asc')}
+              className="p-1.5 text-gray-400 hover:text-white"
+              title="Low to High"
+            >
+              <ArrowUp size={14} />
+            </Button>
+            <Button
+              variant={prioritySortOrder === 'desc' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setPrioritySortOrder(prioritySortOrder === 'desc' ? '' : 'desc')}
+              className="p-1.5 text-gray-400 hover:text-white"
+              title="High to Low"
+            >
+              <ArrowDown size={14} />
+            </Button>
+            {prioritySortOrder && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setPrioritySortOrder('')}
-                className={`w-8 h-8 flex items-center justify-center flex-shrink-0 box-border ${prioritySortOrder ? 'text-white' : 'text-gray-400 hover:text-white'}`}
-                style={{ 
-                  minWidth: '32px', 
-                  maxWidth: '32px',
-                  minHeight: '32px',
-                  maxHeight: '32px',
-                  padding: '0'
-                }}
-                title="Clear sort"
-                disabled={!prioritySortOrder}
+                className="p-1.5 text-gray-500 hover:text-white text-xs"
               >
                 <ArrowUpDown size={12} />
               </Button>
-            </div>
+            )}
           </div>
-
-          {/* Date Range Group - Hidden on mobile */}
-          <div className="hidden sm:flex sm:flex-row sm:items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg whitespace-nowrap">
+          <div className="flex items-center gap-2 shrink-0">
             <DateRangePicker
-            onRangeChange={(start, end) => {
-              const newFilters: DiagnosticFilters = {
-                ...filters, // Preserve existing filters
-                alarm_id: alarmIdParam || undefined,
-                start_time: start || undefined,
-                end_time: end || undefined,
-              };
-              // Preserve all filters if selected
-              if (selectedPriority) {
-                newFilters.risk_level = selectedPriority as any;
-              } else {
-                delete newFilters.risk_level;
-              }
-              if (selectedSiteId) {
-                newFilters.site_id = selectedSiteId;
-              } else {
-                delete newFilters.site_id;
-              }
-              if (selectedPriority) {
-                newFilters.risk_level = selectedPriority as any;
-              } else {
-                delete newFilters.risk_level;
-              }
-              setLocalFilters(newFilters);
-              setFilters(newFilters);
-              fetchDiagnostics(newFilters, pagination.limit, 0);
-              setPagination(pagination.limit, 0);
-              // Also update stats with new filters to keep them in sync
-              fetchStats(undefined, undefined, newFilters);
-            }}
+              label="Date"
+              onRangeChange={(start, end) => {
+                const next: DiagnosticFilters = {
+                  ...filters,
+                  alarm_id: alarmIdParam || undefined,
+                  start_time: start || undefined,
+                  end_time: end || undefined,
+                };
+                if (selectedPriority) next.risk_level = selectedPriority as any;
+                if (selectedSiteId) next.site_id = selectedSiteId;
+                setLocalFilters(next);
+                setFilters(next);
+                fetchDiagnostics(next, pagination.limit, 0);
+                setPagination(pagination.limit, 0);
+                fetchStats(undefined, undefined, next);
+              }}
             />
           </div>
-
-          <div className="hidden sm:flex items-center gap-2 ml-auto">
-            <Button variant="primary" size="sm" onClick={handleFilterChange}>
-              Apply Filters
-            </Button>
-          </div>
-        </FilterBar>
+        </div>
+      </FilterBar>
 
       {/* Error Message */}
       {error && (

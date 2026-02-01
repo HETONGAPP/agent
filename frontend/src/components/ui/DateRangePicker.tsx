@@ -70,38 +70,50 @@ export const DateRangePicker = ({ onRangeChange, label = 'Date Range' }: DateRan
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <label className="text-sm text-gray-400">{label}:</label>
+      <label className="text-xs text-gray-500 shrink-0">{label}</label>
       <input
         type="date"
         value={startDate}
         onChange={(e) => setStartDate(e.target.value)}
-        className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+        className="px-2 py-1.5 bg-gray-800/80 border border-gray-600/60 rounded text-white text-sm w-[130px] max-w-full"
       />
-      <span className="text-gray-400">to</span>
+      <span className="text-gray-500 text-xs shrink-0">→</span>
       <input
         type="date"
         value={endDate}
         onChange={(e) => setEndDate(e.target.value)}
-        className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+        className="px-2 py-1.5 bg-gray-800/80 border border-gray-600/60 rounded text-white text-sm w-[130px] max-w-full"
       />
-      <div className="flex items-center gap-2">
-        <Button variant="primary" size="sm" onClick={handleApply}>
+      <div className="flex items-center gap-1">
+        <Button variant="primary" size="sm" onClick={handleApply} className="text-xs px-2 py-1">
           Apply
         </Button>
-        <Button variant="ghost" size="sm" onClick={handleClear}>
+        <Button variant="ghost" size="sm" onClick={handleClear} className="text-xs px-2 py-1">
           Clear
         </Button>
       </div>
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={() => handleQuickSelect(1)}>
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => handleQuickSelect(1)}
+          className="px-1.5 py-1 text-xs text-gray-400 hover:text-white rounded hover:bg-gray-700/50"
+        >
           1D
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleQuickSelect(7)}>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleQuickSelect(7)}
+          className="px-1.5 py-1 text-xs text-gray-400 hover:text-white rounded hover:bg-gray-700/50"
+        >
           7D
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleQuickSelect(30)}>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleQuickSelect(30)}
+          className="px-1.5 py-1 text-xs text-gray-400 hover:text-white rounded hover:bg-gray-700/50"
+        >
           30D
-        </Button>
+        </button>
       </div>
     </div>
   );

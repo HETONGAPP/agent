@@ -46,7 +46,7 @@ export const SearchInput = ({
       value={query}
       onChange={(e) => setQuery(e.target.value)}
       placeholder={placeholder}
-      className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+      className={`w-full px-2.5 py-1.5 text-sm bg-gray-800/80 border border-gray-600/60 rounded text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/60 focus:border-gray-500 ${className}`}
     />
   );
 };

@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useToastStore } from '@/store/useToastStore';
 import { LogOut, User, ChevronDown, Menu, LayoutDashboard, Map, Plug, Bell, FileText, Workflow } from 'lucide-react';
 import logoIcon from '@/assets/web.svg';
+import { RELEASE } from '@/config/constants';
 
 const mobileNavItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -219,6 +220,13 @@ export const Navbar = () => {
           </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
+          <span
+            className="font-mono text-xs text-gray-400 select-none hidden sm:inline"
+            style={{ letterSpacing: '0.1em' }}
+            title={`Release ${RELEASE}`}
+          >
+            v{RELEASE}
+          </span>
           {user && (
             <div className="relative" ref={menuRef} style={{ zIndex: 10000, position: 'relative' }}>
               <motion.button

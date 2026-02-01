@@ -18,8 +18,8 @@ export const Layout = ({ children }: LayoutProps) => {
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 flex flex-col overflow-hidden">
       <Navbar />
       <div className="flex flex-1 overflow-hidden relative min-h-0">
-        {/* Hide sidebar on mobile, show on desktop */}
-        <div className="hidden lg:block">
+        {/* Hide sidebar on mobile, show on desktop — h-full so sidebar fits and bottom release is visible */}
+        <div className="hidden lg:flex lg:flex-col lg:h-full">
           <Sidebar />
         </div>
         <main 

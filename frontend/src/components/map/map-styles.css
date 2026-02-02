@@ -158,6 +158,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Force GPU layer so pulse animation runs on mobile (transform parent in Leaflet can block it) */
+  transform: translateZ(0);
+  will-change: transform;
+  -webkit-transform: translateZ(0);
 }
 
 .site-marker-icon {
@@ -177,6 +181,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  -webkit-transform: translate(-50%, -50%);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -184,36 +189,47 @@
   background: rgba(59, 130, 246, 0.3); /* Default blue, will be overridden by inline style */
   pointer-events: none;
   opacity: 0;
+  /* Promote to own layer so animation runs on mobile inside Leaflet's transformed pane */
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Trigger animation - always animate when container exists */
 .site-marker-container .site-marker-pulse-1 {
   animation: heartbeat-pulse 2s ease-out 0s;
+  -webkit-animation: heartbeat-pulse 2s ease-out 0s;
 }
 
 .site-marker-container .site-marker-pulse-2 {
   animation: heartbeat-pulse 2s ease-out 0.4s;
+  -webkit-animation: heartbeat-pulse 2s ease-out 0.4s;
 }
 
 .site-marker-container .site-marker-pulse-3 {
   animation: heartbeat-pulse 2s ease-out 0.8s;
+  -webkit-animation: heartbeat-pulse 2s ease-out 0.8s;
 }
 
 /* When animation key changes, restart animation */
 .site-marker-container[data-animation-key] .site-marker-pulse {
   animation: none;
+  -webkit-animation: none;
 }
 
 .site-marker-container[data-animation-key] .site-marker-pulse-1 {
   animation: heartbeat-pulse 2s ease-out 0s;
+  -webkit-animation: heartbeat-pulse 2s ease-out 0s;
 }
 
 .site-marker-container[data-animation-key] .site-marker-pulse-2 {
   animation: heartbeat-pulse 2s ease-out 0.4s;
+  -webkit-animation: heartbeat-pulse 2s ease-out 0.4s;
 }
 
 .site-marker-container[data-animation-key] .site-marker-pulse-3 {
   animation: heartbeat-pulse 2s ease-out 0.8s;
+  -webkit-animation: heartbeat-pulse 2s ease-out 0.8s;
 }
 
 @keyframes heartbeat-pulse {
@@ -226,6 +242,24 @@
     opacity: 0.4;
   }
   100% {
+    transform: translate(-50%, -50%) scale(3.5);
+    opacity: 0;
+  }
+}
+
+@-webkit-keyframes heartbeat-pulse {
+  0% {
+    -webkit-transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    -webkit-transform: translate(-50%, -50%) scale(2.5);
+    transform: translate(-50%, -50%) scale(2.5);
+    opacity: 0.4;
+  }
+  100% {
+    -webkit-transform: translate(-50%, -50%) scale(3.5);
     transform: translate(-50%, -50%) scale(3.5);
     opacity: 0;
   }

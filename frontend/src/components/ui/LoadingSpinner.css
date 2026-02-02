@@ -1,0 +1,46 @@
+/**
+ * Loading spinner animation – works on iOS Safari (CSS animation inside transformed parents)
+ */
+.loading-spinner-inner {
+  animation: loading-spin 1s linear infinite;
+  -webkit-animation: loading-spin 1s linear infinite;
+}
+
+@keyframes loading-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@-webkit-keyframes loading-spin {
+  from {
+    -webkit-transform: rotate(0deg);
+    transform: rotate(0deg);
+  }
+  to {
+    -webkit-transform: rotate(360deg);
+    transform: rotate(360deg);
+  }
+}
+
+/* Promote to own layer so animation runs on iOS */
+.loading-spinner-wrap {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Disable CSS animation when using Web Animations API on mobile */
+.loading-spinner-no-css {
+  animation: none !important;
+  -webkit-animation: none !important;
+}
+
+/* Shared class for any element that should spin (e.g. Button loading icon) */
+.spin-ios {
+  animation: loading-spin 1s linear infinite;
+  -webkit-animation: loading-spin 1s linear infinite;
+}

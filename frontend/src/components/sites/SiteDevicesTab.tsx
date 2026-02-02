@@ -177,14 +177,14 @@ export const SiteDevicesTab = ({
       <FilterBar
         showClear={false}
       >
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 min-w-0 w-full">
-          <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
-            <Filter size={16} className="text-gray-400 flex-shrink-0" />
-            <label className="text-sm text-gray-400 whitespace-nowrap">Device Type:</label>
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+            <Filter size={16} className="text-gray-400 shrink-0" />
+            <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Device Type:</label>
             <select
               value={selectedDeviceType}
               onChange={(e) => setSelectedDeviceType(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[120px] sm:min-w-[150px]"
+              className="flex-1 min-w-0 max-w-full sm:min-w-[150px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Device Types</option>
               {availableDeviceTypes.map((deviceType) => (
@@ -194,12 +194,12 @@ export const SiteDevicesTab = ({
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
-            <label className="text-sm text-gray-400 whitespace-nowrap">Status:</label>
+          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+            <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Status:</label>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[120px] sm:min-w-[150px]"
+              className="flex-1 min-w-0 max-w-full sm:min-w-[150px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Statuses</option>
               {Object.entries(DEVICE_STATUS).map(([key, value]) => (
@@ -212,6 +212,7 @@ export const SiteDevicesTab = ({
         </div>
       </FilterBar>
 
+      <div className="mt-4">
       {filteredDevices.length > 0 ? (
         <>
           <DataTable data={paginatedDevices} columns={deviceColumns} />
@@ -239,6 +240,7 @@ export const SiteDevicesTab = ({
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 };

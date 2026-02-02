@@ -523,21 +523,19 @@ export const SiteRulesTab = ({
   
   return (
     <div className="card w-full max-w-full min-w-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-4 border-b border-gray-700/50">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-700/50">
         <div className="flex items-center gap-3 min-w-0">
           <AlertCircle className="text-yellow-400 shrink-0" size={20} />
-          <h3 className="text-lg sm:text-xl font-semibold text-white truncate">Rules</h3>
+          <h3 className="text-xl font-semibold text-white">Rules</h3>
           {rulesTableData.length > 0 && (
-            <span className="shrink-0">
-              <Badge type="status" value={`${rulesTableData.length} rules`} size="sm" />
-            </span>
+            <Badge type="status" value={`${rulesTableData.length} rules`} size="sm" />
           )}
         </div>
         <Button
           variant="primary"
           size="sm"
           onClick={onAddRule}
-          className="group hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 shrink-0 w-full sm:w-auto"
+          className="group hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 shrink-0"
         >
           <AlertCircle size={16} className="mr-2 group-hover:scale-110 transition-transform" />
           Add Rule
@@ -594,7 +592,8 @@ export const SiteRulesTab = ({
           </div>
         </div>
       </FilterBar>
-      
+
+      <div className="mt-4">
       <DataTable data={paginatedRules} columns={rulesColumns} />
       
       {/* Pagination */}
@@ -609,6 +608,7 @@ export const SiteRulesTab = ({
           />
         </div>
       )}
+      </div>
     </div>
   );
 };

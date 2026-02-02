@@ -48,6 +48,27 @@ const getSiteStatus = (stats?: SiteStats): string => {
   return 'unknown';
 };
 
+// Detect iOS (Safari often doesn't run CSS animations inside Leaflet's transformed pane)
+const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+// Heartbeat keyframes for Web Animations API (used on iOS where CSS animation fails)
+const PULSE_KEYFRAMES: Keyframe[] = [
+  { transform: 'translate(-50%, -50%) scale(1)', opacity: 0.8 },
+  { transform: 'translate(-50%, -50%) scale(2.5)', opacity: 0.4 },
+  { transform: 'translate(-50%, -50%) scale(3.5)', opacity: 0 },
+];
+const PULSE_OPTIONS: KeyframeAnimationOptions = { duration: 2000, easing: 'ease-out', fill: 'forwards' };
+
+function runPulseAnimationJS(container: HTMLElement): void {
+  const pulse1 = container.querySelector('.site-marker-pulse-1') as HTMLElement;
+  const pulse2 = container.querySelector('.site-marker-pulse-2') as HTMLElement;
+  const pulse3 = container.querySelector('.site-marker-pulse-3') as HTMLElement;
+  if (!pulse1 || !pulse2 || !pulse3) return;
+  pulse1.animate(PULSE_KEYFRAMES, { ...PULSE_OPTIONS, delay: 0 });
+  pulse2.animate(PULSE_KEYFRAMES, { ...PULSE_OPTIONS, delay: 400 });
+  pulse3.animate(PULSE_KEYFRAMES, { ...PULSE_OPTIONS, delay: 800 });
+}
+
 // Create custom icon with heartbeat animation support
 const createSiteIcon = (
   isActive: boolean, 
@@ -120,52 +141,49 @@ export const SiteMarker = ({ site, onClick }: SiteMarkerProps) => {
 
   // Restart animation when animationKey changes
   useEffect(() => {
-    if (animationKey > 0 && markerRef.current) {
+    if (!markerRef.current) return;
+
+    if (isIOS) {
+      // iOS: run after Leaflet has updated the icon DOM
+      const t = setTimeout(() => {
+        const markerElement = markerRef.current?.getElement();
+        const container = markerElement?.querySelector('.site-marker-container') as HTMLElement;
+        if (container) runPulseAnimationJS(container);
+      }, 50);
+      return () => clearTimeout(t);
+    }
+
+    if (animationKey > 0) {
       const markerElement = markerRef.current.getElement();
-      if (markerElement) {
-        const container = markerElement.querySelector('.site-marker-container') as HTMLElement;
-        if (container) {
-          // Force reflow to restart animation
-          const pulses = container.querySelectorAll('.site-marker-pulse');
-          pulses.forEach((pulse: Element) => {
-            const pulseEl = pulse as HTMLElement;
-            // Remove animation
-            pulseEl.style.animation = 'none';
-            // Force reflow
-            void pulseEl.offsetWidth;
-            // Re-add animation
-            pulseEl.style.animation = '';
-          });
-        }
+      const container = markerElement?.querySelector('.site-marker-container') as HTMLElement;
+      if (container) {
+        const pulses = container.querySelectorAll('.site-marker-pulse');
+        pulses.forEach((pulse: Element) => {
+          const pulseEl = pulse as HTMLElement;
+          pulseEl.style.animation = 'none';
+          void pulseEl.offsetWidth;
+          pulseEl.style.animation = '';
+        });
       }
     }
   }, [animationKey]);
 
-  // Set up click and popup event listeners
+  // Set up click and popup event listeners, and on iOS start pulse animation once icon is in DOM
   useEffect(() => {
-    if (markerRef.current) {
-      const marker = markerRef.current;
-      const leafletMarker = marker.leafletElement;
-      
-      if (leafletMarker) {
-        // Trigger animation on marker click
-        const handleClick = () => {
-          setAnimationKey(prev => prev + 1);
-        };
-        
-        // Also trigger animation when popup opens
-        const handlePopupOpen = () => {
-          setAnimationKey(prev => prev + 1);
-        };
-        
-        leafletMarker.on('click', handleClick);
-        leafletMarker.on('popupopen', handlePopupOpen);
-        
-        return () => {
-          leafletMarker.off('click', handleClick);
-          leafletMarker.off('popupopen', handlePopupOpen);
-        };
-      }
+    if (!markerRef.current) return;
+    const marker = markerRef.current;
+    const leafletMarker = marker.leafletElement;
+
+    if (leafletMarker) {
+      const handleClick = () => setAnimationKey(prev => prev + 1);
+      const handlePopupOpen = () => setAnimationKey(prev => prev + 1);
+      leafletMarker.on('click', handleClick);
+      leafletMarker.on('popupopen', handlePopupOpen);
+
+      return () => {
+        leafletMarker.off('click', handleClick);
+        leafletMarker.off('popupopen', handlePopupOpen);
+      };
     }
   }, []);
 

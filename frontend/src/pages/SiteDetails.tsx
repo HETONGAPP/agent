@@ -608,7 +608,7 @@ export const SiteDetails = () => {
       {/* Tabs: min-w-0 + overflow so border stays within content on mobile */}
       <div className="min-w-0 border-b border-gray-700/50">
         <nav className="flex flex-nowrap min-w-0 space-x-1 overflow-x-auto scrollbar-thin pb-px" style={{ WebkitOverflowScrolling: 'touch' }}>
-          {(['overview', 'devices', 'alarms', 'reports', 'rules', 'settings'] as const).map((tab) => (
+          {(['overview', 'devices', 'rules', 'alarms', 'reports', 'settings'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

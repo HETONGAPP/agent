@@ -214,14 +214,14 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
       <FilterBar
         showClear={false}
       >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <label className="text-sm text-gray-400 whitespace-nowrap">Severity:</label>
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0 w-full">
+          <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto flex-1 sm:flex-initial">
+            <Filter size={16} className="text-gray-400 shrink-0" />
+            <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Severity:</label>
             <select
               value={selectedSeverity}
               onChange={(e) => handleSeverityFilter(e.target.value)}
-              className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+              className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[150px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Severities</option>
               {Object.entries(ALARM_SEVERITY).map(([key, value]) => (
@@ -234,6 +234,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
         </div>
       </FilterBar>
 
+      <div className="mt-4">
       {/* Alarms Table */}
       {loading ? (
         <div className="flex items-center justify-center h-[300px]">
@@ -267,6 +268,7 @@ export const SiteAlarmsTab = ({ siteId }: SiteAlarmsTabProps) => {
           />
         </div>
       )}
+      </div>
     </div>
   );
 };

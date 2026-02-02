@@ -167,14 +167,14 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (error: any) {
-          // Cookie might be invalid or expired - clear auth state
-          // Cookie will be handled by backend
+          // Cookie might be invalid or expired - clear auth state (expected when not logged in)
+          // Do not set error here: "Not authenticated" would show on login page before user does anything
           set({
             user: null,
             token: null,
             isAuthenticated: false,
             isLoading: false,
-            error: error.response?.data?.detail || 'Failed to fetch user information',
+            error: null,
           });
         }
       },

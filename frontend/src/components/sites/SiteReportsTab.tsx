@@ -256,14 +256,14 @@ export const SiteReportsTab = ({ siteId }: SiteReportsTabProps) => {
         <FilterBar
           showClear={false}
         >
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-gray-400" />
-              <label className="text-sm text-gray-400 whitespace-nowrap">Risk Level:</label>
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0 w-full">
+            <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto flex-1 sm:flex-initial">
+              <Filter size={16} className="text-gray-400 shrink-0" />
+              <label className="text-sm text-gray-400 whitespace-nowrap shrink-0">Risk Level:</label>
               <select
                 value={selectedRiskLevel}
                 onChange={(e) => setSelectedRiskLevel(e.target.value === selectedRiskLevel ? '' : e.target.value)}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+                className="flex-1 min-w-0 w-full sm:w-auto sm:min-w-[150px] px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">All Risk Levels</option>
                 {['High', 'Medium', 'Low'].map((level) => (
@@ -276,6 +276,7 @@ export const SiteReportsTab = ({ siteId }: SiteReportsTabProps) => {
           </div>
         </FilterBar>
 
+        <div className="mt-4">
         {/* Reports Table */}
         {loading ? (
           <div className="flex items-center justify-center h-[300px]">
@@ -309,6 +310,8 @@ export const SiteReportsTab = ({ siteId }: SiteReportsTabProps) => {
               />
           </div>
         )}
+        </div>
+
       </div>
 
       {/* Selected Diagnostic Details */}

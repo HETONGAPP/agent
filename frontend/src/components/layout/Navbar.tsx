@@ -92,8 +92,8 @@ function MobileNavPortal() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <nav className="p-3 pb-4">
-              <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <nav className="py-4 px-2">
+              <ul className="space-y-0.5">
                 {mobileNavItems.map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
@@ -101,15 +101,15 @@ function MobileNavPortal() {
                       <Link
                         to={item.path}
                         onClick={() => setOpen(false)}
-                        className={`flex flex-col items-center justify-center gap-1.5 px-3 py-4 rounded-xl transition-colors duration-150 min-h-[72px] ${
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 transition-colors duration-150 ${
                           isActive
-                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30'
-                            : 'text-gray-300 hover:bg-gray-700/50 hover:text-white active:bg-gray-700 bg-gray-800/50'
+                            ? 'bg-blue-600/20 text-blue-400'
+                            : 'hover:bg-gray-700/50 hover:text-white active:bg-gray-700/70'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' }}
                       >
-                        <item.icon size={24} className="flex-shrink-0" />
-                        <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
+                        <item.icon size={20} className="flex-shrink-0 text-current" />
+                        <span className="text-sm font-medium">{item.label}</span>
                       </Link>
                     </li>
                   );
@@ -236,7 +236,7 @@ const NavHeader = memo(function NavHeader() {
     >
       <div className="flex items-center justify-between h-full min-h-0">
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-90 transition-all duration-300 group">
+          <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-90 transition-all duration-300 group ml-2 sm:ml-0">
             <img src={logoIcon} alt="BESS Agent Logo" className="h-8 sm:h-10 w-auto" />
             <div className="flex flex-col hidden sm:flex">
               <h1 className="text-sm sm:text-base font-semibold text-white leading-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">

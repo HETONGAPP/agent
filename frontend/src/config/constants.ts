@@ -4,7 +4,7 @@
  */
 
 /** Release version — change here to update version shown in sidebar and elsewhere */
-export const RELEASE = '1.2.2';
+export const RELEASE = '1.3.0';
 
 // API Endpoints
 export const API_ENDPOINTS = {

@@ -116,6 +116,11 @@ function MobileNavPortal() {
                 })}
               </ul>
             </nav>
+            <div className="py-3 text-center border-t border-gray-700/50">
+              <span className="text-xs italic bg-gradient-to-r from-gray-400 via-gray-300 to-gray-500 bg-clip-text text-transparent font-medium">
+                Version {RELEASE}
+              </span>
+            </div>
           </div>
         </motion.div>
       )}
@@ -238,6 +243,7 @@ const NavHeader = memo(function NavHeader() {
         <div className="flex items-center gap-2 sm:gap-3">
           <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-90 transition-all duration-300 group ml-2 sm:ml-0">
             <img src={logoIcon} alt="BESS Agent Logo" className="h-8 sm:h-10 w-auto" />
+            <span className="sm:hidden font-semibold text-white text-sm whitespace-nowrap">EasyGrid</span>
             <div className="flex flex-col hidden sm:flex">
               <h1 className="text-sm sm:text-base font-semibold text-white leading-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                 Easy Grid | BESS Diagnostic Agent

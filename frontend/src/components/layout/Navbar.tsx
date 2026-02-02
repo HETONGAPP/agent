@@ -11,7 +11,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useToastStore } from '@/store/useToastStore';
 import { useMobileNavStore } from '@/store/useMobileNavStore';
 import { useUserMenuStore } from '@/store/useUserMenuStore';
-import { LogOut, User, ChevronDown, Menu, LayoutDashboard, Map, Plug, Bell, FileText, Workflow } from 'lucide-react';
+import { LogOut, User, Menu, LayoutDashboard, Map, Plug, Bell, FileText, Workflow } from 'lucide-react';
 import logoIcon from '@/assets/web.svg';
 import { RELEASE } from '@/config/constants';
 
@@ -272,7 +272,7 @@ const NavHeader = memo(function NavHeader() {
               type="button"
               data-user-menu-trigger
               onClick={() => useUserMenuStore.getState().setOpen((o) => !o)}
-              className="flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-xl text-gray-300 hover:bg-gray-700/80 active:bg-gray-600/80 sm:text-white sm:bg-gradient-to-r sm:from-gray-700 sm:to-gray-600 sm:hover:from-gray-600 sm:hover:to-gray-500 sm:px-4 sm:py-2 sm:shadow-md sm:shadow-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+              className="flex items-center justify-center gap-1 sm:gap-2 rounded-lg sm:rounded-xl text-gray-300 bg-transparent hover:bg-gray-700/80 active:bg-gray-600/80 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
               style={{
                 WebkitTapHighlightColor: 'transparent',
                 touchAction: 'manipulation',
@@ -281,9 +281,7 @@ const NavHeader = memo(function NavHeader() {
               }}
               aria-label="User menu"
             >
-              <User className="w-5 h-5 sm:w-4 sm:h-4 flex-shrink-0 pointer-events-none" />
-              <span className="text-xs sm:text-sm font-medium hidden sm:inline">{user.full_name || user.username}</span>
-              <ChevronDown className="w-4 h-4 hidden sm:block pointer-events-none" />
+              <User className="w-5 h-5 flex-shrink-0 pointer-events-none" aria-hidden />
             </button>
           )}
         </div>

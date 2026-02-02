@@ -200,6 +200,7 @@ export const DataCenterMap = ({ onSiteClick, onMapClick, height = '600px' }: Dat
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           noWrap={true}
+          className="map-tiles"
         />
         <ZoomLimiter minZoom={3} maxZoom={18} />
         <MapClickHandler onMapClick={onMapClick} />

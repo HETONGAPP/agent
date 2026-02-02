@@ -18,17 +18,16 @@
   padding: 0 !important;
 }
 
-/* Apply filter to make map tiles darker and enhance ocean blue color */
-.leaflet-tile-container img {
-  /* Enhance blue tones for deeper blue ocean, while keeping land readable */
-  filter: brightness(0.75) contrast(1.2) saturate(1.6) hue-rotate(-12deg);
-  -webkit-filter: brightness(0.75) contrast(1.2) saturate(1.6) hue-rotate(-12deg);
-  /* 
-   * brightness(0.75): Darken more for deeper blue
-   * contrast(1.2): Enhance contrast
-   * saturate(1.6): Increase saturation significantly for deeper blue ocean
-   * hue-rotate(-12deg): Shift more towards deeper blue tones
-   */
+/* Dark mode map tiles: invert + tune — 陆地深蓝（提高饱和度去灰），海水蓝 */
+:root {
+  --map-tiles-filter: brightness(0.6) invert(1) contrast(3) hue-rotate(212deg) saturate(0.65) brightness(0.72);
+}
+
+@media (prefers-color-scheme: dark) {
+  .map-tiles {
+    filter: var(--map-tiles-filter, none);
+    -webkit-filter: var(--map-tiles-filter, none);
+  }
 }
 
 /* Leaflet popup - glassmorphism dark style */

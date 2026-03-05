@@ -86,16 +86,20 @@ database:
 
 # LLM configuration
 # Supported providers: openai, ollama, anthropic, google, groq, huggingface, together
+# Use provider: openai + base_url for OpenAI-compatible endpoints (e.g. cursor-api)
 llm:
   # DISABLED: Comment out provider to disable LLM diagnostic service and save tokens
   # provider: groq # Recommended for MVP: groq (free), production: openai
   # provider: null  # Disabled to prevent token consumption
-  provider: ollama  # 使用远程 Ollama 实例
-  # Ollama remote LLM configuration
-  ollama_url: http://10.0.0.228:11434
-  ollama_model: qwen2.5:7b
-  # API key (Ollama 通常不需要，但可以设置为 "ollama" 或留空)
-  api_key: ollama
+  # provider: ollama  # Use remote Ollama instance
+  provider: openai  # cursor-api (OpenAI-compatible)
+  base_url: http://localhost:3001
+  api_key: ${CURSOR_API_AUTH_TOKEN:-d7c132d5900562d36537aa1dc41e9acd11dd4c2614d0cc230bc4d0e0e7cc4cd1}
+  model: default  # cursor-api: "default" (Auto) or e.g. claude-4.6-sonnet-medium, gpt-5-mini (see GET /v1/models)
+  # Ollama remote LLM configuration (when provider: ollama)
+  # ollama_url: http://10.0.0.228:11434
+  # ollama_model: qwen2.5:7b
+  # api_key: ollama
   # Auto-diagnostic: Set to true to automatically generate diagnostics when alarms are created
   # Default: false (disabled) - Use manual trigger API endpoints instead to save tokens:
   #   - POST /api/v1/sites/{site_id}/diagnostics/generate (site-level diagnosis with all devices and history)
@@ -190,6 +194,13 @@ webhook:
   workers: 4
   timeout: 30
   max_request_size: 10485760 # 10MB
+
+# MQTT configuration (optional - leave broker_url empty to disable)
+mqtt:
+  broker_url: ${MQTT_BROKER_URL:-}
+  client_id: ${MQTT_CLIENT_ID:-bess-agent-datacenter}
+  username: ${MQTT_USERNAME:-}
+  password: ${MQTT_PASSWORD:-}
 
 # Rule engine configuration
 rule_engine:

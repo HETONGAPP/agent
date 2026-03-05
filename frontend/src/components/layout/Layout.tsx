@@ -4,21 +4,28 @@
  * Mobile: uses 100dvh, safe-area insets, and responsive gutters (aligned with website approach).
  */
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { PageTransition } from '@/components/ui/PageTransition';
+import { useMapThemeStore } from '@/store/useMapThemeStore';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 export const Layout = ({ children }: LayoutProps) => {
+  const mapTheme = useMapThemeStore((s) => s.mapTheme);
+
+  useEffect(() => {
+    document.body.classList.remove('map-theme-dark', 'map-theme-light');
+    document.body.classList.add(`map-theme-${mapTheme}`);
+  }, [mapTheme]);
+
   return (
     <div
       className="flex flex-col overflow-hidden bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 min-h-screen"
       style={{
-        minHeight: '100vh',
         minHeight: '100dvh',
         height: '100dvh',
       }}

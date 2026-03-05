@@ -16,7 +16,7 @@ import { DeviceManagement } from './pages/DeviceManagement';
 import { AlarmManagement } from './pages/AlarmManagement';
 import { DiagnosticReports } from './pages/DiagnosticReports';
 import { DiagnosticPage } from './pages/DiagnosticPage';
-import { DataFlowVisualization } from './pages/DataFlowVisualization';
+import { Settings } from './pages/Settings';
 import { DataCenterMapPage } from './pages/DataCenterMap';
 import { SiteDetails } from './pages/SiteDetails';
 import { Login } from './pages/Login';
@@ -140,7 +140,7 @@ function App() {
                   <Route path="/alarms/:alarmId" element={<AlarmManagement />} />
                   <Route path="/diagnostics" element={<DiagnosticReports />} />
                   <Route path="/diagnostics/:siteId" element={<DiagnosticPage />} />
-                  <Route path="/flow" element={<DataFlowVisualization />} />
+                  <Route path="/settings" element={<Settings />} />
                 </Routes>
                 <ToastContainer toasts={toasts} onClose={removeToast} />
               </Layout>

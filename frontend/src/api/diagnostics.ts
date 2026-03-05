@@ -74,12 +74,18 @@ export const getDiagnosticByAlarm = async (alarmId: string): Promise<ApiResponse
 };
 
 /**
- * Generate diagnostic report for a specific alarm (manual trigger)
+ * Generate diagnostic report for a specific alarm (manual trigger).
+ * Optional llm_override is sent when user has set LLM in Settings.
  */
-export const generateAlarmDiagnostic = async (alarmId: string): Promise<ApiResponse<Diagnostic>> => {
+export const generateAlarmDiagnostic = async (
+  alarmId: string,
+  llmOverride?: { provider?: string; api_key?: string; model?: string; ollama_url?: string; base_url?: string } | null
+): Promise<ApiResponse<Diagnostic>> => {
+  const body = llmOverride && Object.keys(llmOverride).length > 0 ? { llm_override: llmOverride } : undefined;
   return apiRequest<Diagnostic>({
     method: 'POST',
     url: `/api/v1/alarms/${alarmId}/diagnostic`,
+    ...(body && { data: body }),
   });
 };
 

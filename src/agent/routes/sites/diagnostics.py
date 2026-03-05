@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime, UTC
 from typing import Optional
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Body
 from fastapi.responses import JSONResponse
 
 from ....core import DeviceRegistry
@@ -111,6 +111,7 @@ def register_routes(app: FastAPI):
     async def generate_site_diagnostic(
         site_id: str,
         time_range: str = "-24h",
+        body: Optional[dict] = Body(None),
         site_manager: Optional[SiteManager] = Depends(get_site_manager),
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
@@ -118,7 +119,7 @@ def register_routes(app: FastAPI):
         postgres_storage = Depends(get_postgres_metadata_storage),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
-        """Manually trigger diagnostic agent analysis for a site"""
+        """Manually trigger diagnostic agent analysis for a site. Optional body: { llm_override: { provider?, api_key?, model?, ollama_url? } }."""
         if not influx_client:
             return JSONResponse(
                 status_code=503,
@@ -147,9 +148,31 @@ def register_routes(app: FastAPI):
             )
         
         try:
-            # Get LLM client from diagnostic service
-            llm_client = agent_service.llm_diagnostic_service.llm_client
-            
+            # LLM client: use override from request body if provided, else server default
+            llm_override = (body or {}).get("llm_override") if isinstance(body, dict) else None
+            if llm_override and isinstance(llm_override, dict):
+                app_state = get_app_state()
+                config = app_state.get("config") or {}
+                base_llm = dict(config.get("llm") or {})
+                base_llm.setdefault("temperature", 0.3)
+                base_llm.setdefault("max_tokens", 2000)
+                base_llm.setdefault("timeout", 50)
+                base_llm.setdefault("retry_times", 3)
+                override_clean = {k: v for k, v in llm_override.items() if v is not None and v != ""}
+                merged = {**base_llm, **override_clean}
+                if merged.get("provider", "").lower() == "ollama" and merged.get("model"):
+                    merged["ollama_model"] = merged["model"]
+                # cursor-api does not support gpt-4/gpt-4o; use "default" (Auto) when base_url is set
+                if merged.get("base_url") and (merged.get("model") or "").lower() in ("gpt-4", "gpt-4o"):
+                    merged["model"] = "default"
+                if merged.get("provider"):
+                    from ....llm_diagnostic.client import LLMClient
+                    llm_client = LLMClient.from_config(merged)
+                else:
+                    llm_client = agent_service.llm_diagnostic_service.llm_client
+            else:
+                llm_client = agent_service.llm_diagnostic_service.llm_client
+
             # Get WebSocket manager for real-time updates
             app_state = get_app_state()
             websocket_manager = app_state.get("websocket_manager") if app_state else None

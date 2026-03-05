@@ -11,7 +11,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useToastStore } from '@/store/useToastStore';
 import { useMobileNavStore } from '@/store/useMobileNavStore';
 import { useUserMenuStore } from '@/store/useUserMenuStore';
-import { LogOut, User, Menu, LayoutDashboard, Map, Plug, Bell, FileText, Workflow } from 'lucide-react';
+import { LogOut, User, Menu, LayoutDashboard, Map, Plug, Bell, FileText, Settings } from 'lucide-react';
 import logoIcon from '@/assets/web.svg';
 import { RELEASE } from '@/config/constants';
 
@@ -21,7 +21,7 @@ const mobileNavItems = [
   { path: '/devices', label: 'Devices', icon: Plug },
   { path: '/alarms', label: 'Alarms', icon: Bell },
   { path: '/diagnostics', label: 'Diagnostics', icon: FileText },
-  { path: '/flow', label: 'Data Flow', icon: Workflow },
+  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 /** Mobile dropdown: standalone component; only this subscribes to open so header does not re-render */

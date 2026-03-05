@@ -104,7 +104,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (error: any) {
-          const errorMessage = error.response?.data?.detail || error.message || '注册失败';
+          const errorMessage = error.response?.data?.detail || error.message || 'Registration failed';
           set({
             user: null,
             token: null,

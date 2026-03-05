@@ -75,14 +75,19 @@ class BaseLLMClient(ABC):
 
 
 class OpenAIClient(BaseLLMClient):
-    """OpenAI API client"""
+    """OpenAI API client (also supports OpenAI-compatible endpoints via base_url, e.g. cursor-api)"""
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         try:
             import openai
 
-            self.client = openai.AsyncOpenAI(api_key=config.get("api_key") or os.getenv("OPENAI_API_KEY"))
+            api_key = config.get("api_key") or os.getenv("OPENAI_API_KEY")
+            base_url = config.get("base_url")
+            if base_url:
+                self.client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url.rstrip("/") + "/v1")
+            else:
+                self.client = openai.AsyncOpenAI(api_key=api_key)
             self.model = config.get("model", "gpt-4")
         except ImportError:
             raise ImportError("openai package not installed. Install with: pip install openai")

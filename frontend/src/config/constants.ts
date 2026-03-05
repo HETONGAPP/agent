@@ -131,5 +131,8 @@ export const STORAGE_KEYS = {
   USER_PREFERENCES: 'bess_user_preferences',
   FLOW_LAYOUT: 'bess_flow_layout',
   SIDEBAR_STATE: 'bess_sidebar_state',
+  MAP_THEME: 'bess_map_theme',
+  TIMEZONE: 'bess_timezone',
+  LLM_SETTINGS: 'bess_llm_settings',
 } as const;
 

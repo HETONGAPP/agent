@@ -36,6 +36,7 @@ from .routes import (  # noqa: E402
     admin,
     websocket,
     auth,
+    settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     metrics.register_metrics_routes(app)
     admin.register_admin_routes(app)
     websocket.register_websocket_routes(app)
+    settings.register_settings_routes(app)
 
     return app
 

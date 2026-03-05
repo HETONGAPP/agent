@@ -15,21 +15,21 @@ export default {
         xl: '1280px',
       },
       colors: {
-        // Visible Manus 设计系统颜色
+        // Visible Manus design system colors
         background: '#09090b',
         surface: {
           DEFAULT: '#18181b',
           secondary: '#27272a',
         },
-        // Alarm severity colors (保留原有)
+        // Alarm severity colors
         critical: '#EF4444',
         warning: '#F59E0B',
         info: '#3B82F6',
-        // Risk level colors (保留原有)
+        // Risk level colors
         'risk-high': '#DC2626',
         'risk-medium': '#EA580C',
         'risk-low': '#16A34A',
-        // Status colors (保留原有)
+        // Status colors
         active: '#10B981',
         inactive: '#6B7280',
         // Diagnostic agent colors

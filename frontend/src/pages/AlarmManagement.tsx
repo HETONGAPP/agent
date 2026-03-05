@@ -26,6 +26,7 @@ import { useSiteStore } from '@/store/useSiteStore';
 import { DEVICE_TYPES } from '@/config/constants';
 import { generateAlarmDiagnostic } from '@/api/diagnostics';
 import { generateSiteDiagnostic } from '@/api/sites';
+import { useLLMSettingsStore } from '@/store/useLLMSettingsStore';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageLoading } from '@/components/ui/PageLoading';
 
@@ -284,7 +285,7 @@ export const AlarmManagement = () => {
               onClick={async () => {
                 setGeneratingDiagnostics(prev => new Set(prev).add(siteSummary.site_id));
                 try {
-                  const response = await generateSiteDiagnostic(siteSummary.site_id, '-24h');
+                  const response = await generateSiteDiagnostic(siteSummary.site_id, '-24h', useLLMSettingsStore.getState().getOverride());
                   if (response.status === 'success' && response.data) {
                     addToast(`Site diagnostic generated for site ${siteSummary.site_id}`, 'success');
                     // Navigate to diagnostics page with site_id filter

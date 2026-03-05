@@ -18,16 +18,19 @@
   padding: 0 !important;
 }
 
-/* Dark mode map tiles: invert + tune — 陆地深蓝（提高饱和度去灰），海水蓝 */
+/* Map tiles: dark (invert) or light (default) — controlled by Settings > Map color */
 :root {
   --map-tiles-filter: brightness(0.6) invert(1) contrast(3) hue-rotate(212deg) saturate(0.65) brightness(0.72);
 }
 
-@media (prefers-color-scheme: dark) {
-  .map-tiles {
-    filter: var(--map-tiles-filter, none);
-    -webkit-filter: var(--map-tiles-filter, none);
-  }
+body.map-theme-dark .map-tiles {
+  filter: var(--map-tiles-filter, none);
+  -webkit-filter: var(--map-tiles-filter, none);
+}
+
+body.map-theme-light .map-tiles {
+  filter: none;
+  -webkit-filter: none;
 }
 
 /* Leaflet popup - glassmorphism dark style */

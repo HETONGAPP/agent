@@ -234,20 +234,24 @@ export const getSiteAlarms = async (
 
 /**
  * Generate site diagnostic report (manual trigger)
- * Analyzes all devices, alarms, and historical data for comprehensive diagnosis
+ * Analyzes all devices, alarms, and historical data for comprehensive diagnosis.
+ * Optional llm_override is sent when user has set LLM in Settings.
  */
 export const generateSiteDiagnostic = async (
   siteId: string,
-  timeRange: string = '-24h'
+  timeRange: string = '-24h',
+  llmOverride?: { provider?: string; api_key?: string; model?: string; ollama_url?: string; base_url?: string } | null
 ): Promise<any> => {
   const params = new URLSearchParams();
   if (timeRange) {
     params.append('time_range', timeRange);
   }
+  const body = llmOverride && Object.keys(llmOverride).length > 0 ? { llm_override: llmOverride } : undefined;
 
   return apiRequest({
     method: 'POST',
     url: `/api/v1/sites/${siteId}/diagnostics/generate?${params.toString()}`,
+    ...(body && { data: body }),
   });
 };
 

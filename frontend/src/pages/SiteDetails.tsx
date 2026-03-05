@@ -25,6 +25,7 @@ import { useSiteDetails } from '@/hooks/useSiteDetails';
 import { useToastStore } from '@/store/useToastStore';
 import { useSiteDiagnosticStore } from '@/store/useSiteDiagnosticStore';
 import { updateSiteRule, generateSiteDiagnostic, getSiteDiagnostics } from '@/api/sites';
+import { useLLMSettingsStore } from '@/store/useLLMSettingsStore';
 import { Device, Diagnostic } from '@/types';
 import { DiagnosticOutput } from '@/components/diagnostics/DiagnosticOutput';
 
@@ -459,7 +460,7 @@ export const SiteDetails = () => {
               console.log(`[SiteDetails] Starting diagnostic for site ${siteId} at ${new Date(diagnosticStartTime).toISOString()}`);
               
               try {
-                const response = await generateSiteDiagnostic(siteId, diagnosticTimeRange);
+                const response = await generateSiteDiagnostic(siteId, diagnosticTimeRange, useLLMSettingsStore.getState().getOverride());
                 
                 console.log(`[SiteDetails] Diagnostic API call completed for site ${siteId}`);
                 

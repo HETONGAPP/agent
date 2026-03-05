@@ -6,7 +6,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, LayoutDashboard, Map, Plug, Bell, FileText, Workflow, X } from 'lucide-react';
+import { ChevronRight, LayoutDashboard, Map, Plug, Bell, FileText, Settings, X } from 'lucide-react';
 import { useSidebarStore } from '@/store/useSidebarStore';
 
 const navigationItems = [
@@ -15,7 +15,7 @@ const navigationItems = [
   { path: '/devices', label: 'Devices', icon: Plug },
   { path: '/alarms', label: 'Alarms', icon: Bell },
   { path: '/diagnostics', label: 'Diagnostics', icon: FileText },
-  { path: '/flow', label: 'Data Flow', icon: Workflow },
+  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export const Sidebar = () => {

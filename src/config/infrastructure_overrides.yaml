@@ -1,0 +1,22 @@
+database:
+  redis:
+    host: localhost
+    port: 6379
+    db: 0
+    password: changeme
+  influxdb:
+    url: http://localhost:8086
+    org: bess
+    bucket: alarms
+    token: __MASKED__
+  postgresql:
+    host: localhost
+    port: 5432
+    database: bess_agent
+    user: bess_agent
+    password: changeme
+mqtt:
+  broker_url: mqtt://localhost:1883
+  client_id: bess-agent-datacenter
+  username: ''
+  password: public

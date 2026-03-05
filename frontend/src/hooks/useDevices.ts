@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { useDeviceStore } from '@/store/useDeviceStore';
 import { DeviceFilters } from '@/types';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { PAGINATION } from '@/config/constants';
 
 export const useDevices = (autoFetch: boolean = true, filters?: DeviceFilters) => {
@@ -24,14 +25,15 @@ export const useDevices = (autoFetch: boolean = true, filters?: DeviceFilters) =
     setSelectedDevice,
     clearError,
   } = useDeviceStore();
+  const defaultPageSize = usePreferencesStore((s) => s.defaultPageSize) ?? PAGINATION.DEFAULT_PAGE_SIZE;
 
   useEffect(() => {
     if (autoFetch) {
-      fetchDevices(filters, PAGINATION.DEFAULT_PAGE_SIZE, 0);
+      fetchDevices(filters, defaultPageSize, 0);
       fetchStats();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFetch, filters]);
+  }, [autoFetch, filters, defaultPageSize]);
 
   return {
     devices,

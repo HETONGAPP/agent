@@ -5,7 +5,7 @@ import logging
 import concurrent.futures
 from collections import defaultdict
 from typing import Optional
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Body
 from fastapi.responses import JSONResponse
 
 from ...storage.influxdb_client import InfluxDBClient
@@ -16,6 +16,7 @@ from ...agent.dependencies import (
     get_agent_service,
     get_site_manager,
     get_postgres_metadata_storage,
+    get_app_state,
 )
 from ...agent.rate_limiter import rate_limit_dependency
 from ...agent.websocket_manager import WebSocketManager, EventType
@@ -720,12 +721,13 @@ def register_alarm_routes(app):
     @app.post("/api/v1/alarms/{alarm_id}/diagnostic")
     async def generate_alarm_diagnostic(
         alarm_id: str,
+        body: Optional[dict] = Body(None),
         influx_client: Optional[InfluxDBClient] = Depends(get_influx_client),
         agent_service: Optional[AgentService] = Depends(get_agent_service),
         postgres_storage = Depends(get_postgres_metadata_storage),
         _rate_limited: bool = Depends(rate_limit_dependency),
     ):
-        """Generate diagnostic report for an alarm"""
+        """Generate diagnostic report for an alarm. Optional body: { llm_override: { provider?, api_key?, model?, ollama_url? } }."""
         if not influx_client:
             return JSONResponse(
                 status_code=503,
@@ -793,7 +795,7 @@ def register_alarm_routes(app):
                             if device_data_list:
                                 device_data = DeviceData.from_dict(device_data_list[0])
             
-            # Generate diagnostic using LLM service
+            # Generate diagnostic using LLM service (or override client from body)
             if not agent_service or not agent_service.llm_diagnostic_service:
                 return JSONResponse(
                     status_code=503,
@@ -802,8 +804,33 @@ def register_alarm_routes(app):
                         "message": "LLM diagnostic service not available",
                     },
                 )
-            
-            llm_service = agent_service.llm_diagnostic_service
+
+            llm_override = (body or {}).get("llm_override") if isinstance(body, dict) else None
+            if llm_override and isinstance(llm_override, dict):
+                app_state = get_app_state()
+                config = app_state.get("config") or {}
+                base_llm = dict(config.get("llm") or {})
+                base_llm.setdefault("temperature", 0.3)
+                base_llm.setdefault("max_tokens", 2000)
+                base_llm.setdefault("timeout", 50)
+                base_llm.setdefault("retry_times", 3)
+                override_clean = {k: v for k, v in llm_override.items() if v is not None and v != ""}
+                merged = {**base_llm, **override_clean}
+                if merged.get("provider", "").lower() == "ollama" and merged.get("model"):
+                    merged["ollama_model"] = merged["model"]
+                # cursor-api does not support gpt-4/gpt-4o; use "default" (Auto) when base_url is set
+                if merged.get("base_url") and (merged.get("model") or "").lower() in ("gpt-4", "gpt-4o"):
+                    merged["model"] = "default"
+                if merged.get("provider"):
+                    from ...llm_diagnostic.client import LLMClient
+                    from ...llm_diagnostic.service import LLMDiagnosticService
+                    override_client = LLMClient.from_config(merged)
+                    llm_service = LLMDiagnosticService(llm_client=override_client)
+                else:
+                    llm_service = agent_service.llm_diagnostic_service
+            else:
+                llm_service = agent_service.llm_diagnostic_service
+
             diagnostic_report = await llm_service.generate_diagnostic(
                 alarm=alarm,
                 device_data=device_data,

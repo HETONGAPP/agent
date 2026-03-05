@@ -70,6 +70,7 @@ docker-compose.override.yml
 # Configuration files (may contain sensitive information)
 config/local.yaml
 config/production.yaml
+config/infrastructure_overrides.yaml
 # Site configuration files (generated at runtime, may contain sensitive information)
 config/sites/*.yaml
 config/sites/*.yml

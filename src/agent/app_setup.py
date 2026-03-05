@@ -36,6 +36,15 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> None:
+    """Merge override into base in place. Override values take precedence."""
+    for key, val in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(val, dict):
+            _deep_merge(base[key], val)
+        else:
+            base[key] = val
+
+
 def expand_env_vars(value: Any) -> Any:
     """
     Recursively expand environment variables in configuration values.
@@ -99,9 +108,22 @@ async def lifespan(app: FastAPI):
     if config_path.exists():
         with open(config_path, "r") as f:
             config = yaml.safe_load(f) or {}
-    
     config = expand_env_vars(config)
-    
+
+    # Merge infrastructure overrides (Redis, InfluxDB, MQTT, PostgreSQL) if present
+    overrides_path = Path(__file__).parent.parent.parent / "config" / "infrastructure_overrides.yaml"
+    if overrides_path.exists():
+        try:
+            with open(overrides_path, "r") as f:
+                overrides = yaml.safe_load(f) or {}
+            overrides = expand_env_vars(overrides)
+            _deep_merge(config, overrides)
+            logger.info("✓ Loaded infrastructure overrides from config/infrastructure_overrides.yaml")
+        except Exception as e:
+            logger.warning(f"Failed to load infrastructure overrides: {e}")
+
+    set_app_state(config=config)
+
     try:
         ConfigValidator.validate_and_warn(config)
     except Exception as e:
@@ -109,14 +131,14 @@ async def lifespan(app: FastAPI):
 
     # Initialize InfluxDB client
     try:
-        influx_url = os.getenv("INFLUXDB_URL", "http://localhost:8086")
-        influx_token = os.getenv("INFLUXDB_TOKEN", "").strip()
-        influx_org = os.getenv("INFLUXDB_ORG", "bess")
-        influx_bucket = os.getenv("INFLUXDB_BUCKET", "alarms")
+        db_config = config.get("database", {})
+        influx_config = db_config.get("influxdb", {})
+        influx_url = influx_config.get("url") or os.getenv("INFLUXDB_URL", "http://localhost:8086")
+        influx_token = (influx_config.get("token") or os.getenv("INFLUXDB_TOKEN", "")).strip()
+        influx_org = influx_config.get("org") or os.getenv("INFLUXDB_ORG", "bess")
+        influx_bucket = influx_config.get("bucket") or os.getenv("INFLUXDB_BUCKET", "alarms")
 
         if influx_token:
-            db_config = config.get("database", {})
-            influx_config = db_config.get("influxdb", {})
             use_pool = influx_config.get("use_connection_pool", True)
             pool_max_connections = influx_config.get("pool_max_connections", 5)
             
@@ -439,10 +461,11 @@ async def lifespan(app: FastAPI):
     mqtt_client = None
     mqtt_handler = None
     try:
-        mqtt_broker_url = os.getenv("MQTT_BROKER_URL", "")
-        mqtt_client_id = os.getenv("MQTT_CLIENT_ID", "bess-agent-datacenter")
-        mqtt_username = os.getenv("MQTT_USERNAME")
-        mqtt_password = os.getenv("MQTT_PASSWORD")
+        mqtt_config = config.get("mqtt", {})
+        mqtt_broker_url = mqtt_config.get("broker_url") or os.getenv("MQTT_BROKER_URL", "")
+        mqtt_client_id = mqtt_config.get("client_id") or os.getenv("MQTT_CLIENT_ID", "")
+        mqtt_username = mqtt_config.get("username") or os.getenv("MQTT_USERNAME")
+        mqtt_password = mqtt_config.get("password") or os.getenv("MQTT_PASSWORD")
 
         if mqtt_broker_url:
             mqtt_client = MQTTClient(

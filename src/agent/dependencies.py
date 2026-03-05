@@ -27,6 +27,7 @@ except ImportError:
 # Application state (initialized in lifespan)
 _app_state = {
     "collector": None,
+    "config": None,
     "influx_client": None,
     "agent_service": None,
     "mqtt_client": None,
